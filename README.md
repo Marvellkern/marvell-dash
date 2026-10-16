@@ -7,3 +7,8 @@ Time + world clocks, sun path, Semarang weather (Open-Meteo), Indonesian and wor
 One static file: `index.html`. Edit the `CONFIG` block at the top of the `<script>` to change links, feeds, cities or currencies.
 
 Shortcuts: `R` refresh, `N` notes, `1`–`9` quick links.
+
+## Chrome new tab
+
+`newtab-extension/` is a tiny Chrome extension that shows the dashboard on every new tab.
+chrome://extensions → turn on Developer mode → Load unpacked → pick the `newtab-extension` folder.
