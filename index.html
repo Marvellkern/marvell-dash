@@ -1,0 +1,981 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Marvell Dashboard</title>
+<meta name="theme-color" content="#000000" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' shape-rendering='crispEdges'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cg fill='%23fff'%3E%3Crect x='9' y='3' width='6' height='6'/%3E%3Crect x='9' y='10' width='6' height='6'/%3E%3Crect x='9' y='17' width='6' height='6'/%3E%3Crect x='9' y='24' width='6' height='6'/%3E%3Crect x='16' y='10' width='6' height='6'/%3E%3Crect x='16' y='17' width='6' height='6'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&family=Instrument+Serif&family=JetBrains+Mono:wght@400&display=swap" />
+<style>
+/* ───────── Tokens (same as the portfolio) ───────── */
+:root {
+  --black: #000000;
+  --white: #ffffff;
+  --dim: rgba(255, 255, 255, 0.55);
+  --faint: rgba(255, 255, 255, 0.18);
+  --orange: #ff8a1f;
+  --heat: linear-gradient(90deg, #ffffff 0%, #fff1a8 22%, #ffcf3f 55%, #ff8a1f 100%);
+  --sans: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'Instrument Serif', 'Times New Roman', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --maxw: 1440px;
+  --pad: 16px;
+  --nav-h: 60px;
+  color-scheme: dark;
+}
+@media (min-width: 768px) { :root { --pad: 32px; } }
+
+*, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+html { background: var(--black); -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+body {
+  margin: 0; background: var(--black); color: var(--white);
+  font-family: var(--sans); font-weight: 500; font-size: 16px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+canvas, svg { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+h1, h2, p, ul, dl, dd { margin: 0; }
+ul { list-style: none; padding: 0; }
+::selection { background: var(--white); color: var(--black); }
+:focus-visible { outline: 1px solid var(--white); outline-offset: 2px; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.label, .mono {
+  font: 400 12px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim);
+}
+.headline { font-size: clamp(1.9rem, 3.4vw, 3.2rem); line-height: 1.02; font-weight: 500; letter-spacing: -0.02em; }
+.headline__sans, .headline__serif { display: block; }
+.headline__sans { font-family: var(--sans); font-weight: 500; }
+.headline__serif { font-family: var(--serif); font-weight: 400; font-size: 1.12em; letter-spacing: -0.005em; line-height: 0.98; }
+
+.textbtn {
+  display: inline-block; padding: 6px 8px;
+  font: 400 12px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--white); white-space: nowrap;
+}
+.cursor { margin-left: 2px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Starfield behind everything */
+.starfield { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; }
+
+/* ───────── Nav ───────── */
+.nav { position: sticky; top: 0; z-index: 50; height: var(--nav-h); background: var(--black); border-bottom: 1px solid var(--faint); }
+.nav__inner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  height: 100%; max-width: calc(var(--maxw) + var(--pad) * 2); margin: 0 auto; padding: 0 var(--pad);
+}
+.nav__brand { display: inline-flex; align-items: center; gap: 10px; font: 400 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.nav__brand .dim { color: var(--dim); }
+.nav__links { display: flex; align-items: center; gap: 4px; }
+.nav__links a, .nav__links button {
+  display: inline-block; padding: 7px 8px; font: 400 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);
+}
+.nav__links .nav__cta { margin-left: 8px; padding: 7px 10px; background: var(--white); color: var(--black); }
+.nav__status { font: 400 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+@media (max-width: 767px) { .nav__wide { display: none; } }
+
+/* ───────── Grid of panels ───────── */
+.wrap { max-width: calc(var(--maxw) + var(--pad) * 2); margin: 0 auto; padding: 32px var(--pad) 0; }
+.grid {
+  display: grid; grid-template-columns: 1fr;
+  border-top: 1px solid var(--faint); border-left: 1px solid var(--faint);
+}
+.panel { position: relative; min-width: 0; padding: 22px 20px 24px; border-right: 1px solid var(--faint); border-bottom: 1px solid var(--faint); }
+@media (min-width: 900px) {
+  .grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .p-time { grid-column: span 7; }
+  .p-weather { grid-column: span 5; }
+  .p-news-id, .p-news-world { grid-column: span 4; grid-row: span 3; }
+  .p-rates, .p-links, .p-notes { grid-column: span 4; }
+  .panel { padding: 26px 28px 28px; }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  .p-time, .p-weather { grid-column: span 6; }
+  .p-news-id, .p-news-world { grid-column: span 6; grid-row: auto; }
+  .p-rates, .p-links, .p-notes { grid-column: span 4; }
+}
+
+.panel__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+.panel__head .mono { white-space: nowrap; }
+
+/* Corner + marks, like the work cards */
+.corner { position: absolute; font: 400 13px/1 var(--mono); color: var(--dim); pointer-events: none; transition: transform 500ms var(--ease), color 500ms var(--ease); }
+.corner--tl { top: -7px; left: -4px; } .corner--tr { top: -7px; right: -4px; }
+.corner--bl { bottom: -7px; left: -4px; } .corner--br { bottom: -7px; right: -4px; }
+@media (hover: hover) {
+  .panel:hover > .corner { color: var(--white); }
+  .panel:hover > .corner--tl { transform: translate(-4px, -4px); }
+  .panel:hover > .corner--tr { transform: translate(4px, -4px); }
+  .panel:hover > .corner--bl { transform: translate(-4px, 4px); }
+  .panel:hover > .corner--br { transform: translate(4px, 4px); }
+}
+
+/* ───────── Time panel ───────── */
+.clock { display: flex; align-items: flex-start; gap: 6px; margin-top: 28px; font-variant-numeric: tabular-nums; }
+.clock__hm { font-family: var(--sans); font-weight: 500; font-size: clamp(4.2rem, 11vw, 9.5rem); line-height: 0.86; letter-spacing: -0.045em; }
+.clock__s { font-family: var(--serif); font-size: clamp(1.8rem, 3.6vw, 3.2rem); line-height: 1; color: var(--dim); margin-top: 0.1em; }
+.time__meta { margin-top: 18px; }
+.time__cols { display: grid; gap: 28px; margin-top: 28px; }
+@media (min-width: 640px) { .time__cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; } }
+
+.specs { font: 400 12px/1.5 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.specs__row { display: grid; grid-template-columns: 13ch minmax(0, 1fr); padding: 9px 0; border-top: 1px solid var(--faint); }
+.specs__row:last-child { border-bottom: 1px solid var(--faint); }
+.specs dt { position: relative; overflow: hidden; white-space: nowrap; color: var(--dim); }
+.specs dt::after { content: ' ........................'; color: var(--faint); }
+.specs dd { padding-left: 1ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.specs dd .dim { color: var(--dim); }
+
+.sunarc { width: 100%; height: 92px; image-rendering: pixelated; image-rendering: crisp-edges; }
+.sunarc__labels { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; white-space: nowrap; }
+@media (max-width: 479px) { .sunarc__labels { font-size: 10px; letter-spacing: 0.04em; } }
+
+/* ───────── Weather panel ───────── */
+.wx__top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; }
+.wx__temp { font-size: clamp(3.4rem, 6vw, 5.2rem); line-height: 0.9; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.wx__temp sup { font-family: var(--serif); font-size: 0.5em; letter-spacing: 0; vertical-align: top; position: relative; top: 0.05em; color: var(--dim); }
+.wx__cond { margin-top: 10px; font-family: var(--serif); font-size: clamp(1.5rem, 2.2vw, 2rem); line-height: 1.05; }
+.wx__glyph { width: 168px; height: 126px; image-rendering: pixelated; image-rendering: crisp-edges; }
+.wx .specs { margin-top: 22px; }
+
+.hourly { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); margin-top: 22px; font: 400 11px/1.25 var(--mono); letter-spacing: 0.04em; text-align: center; color: var(--dim); }
+.hourly__col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.hourly__col.is-now { color: var(--white); }
+.hourly__bar { white-space: pre; line-height: 1.05; color: var(--faint); }
+.hourly__col.wet .hourly__bar { color: var(--dim); }
+.hourly__col.is-now .hourly__bar { color: var(--white); }
+@media (max-width: 479px) { .hourly { grid-template-columns: repeat(8, minmax(0, 1fr)); } .hourly__col:nth-child(n+9) { display: none; } }
+
+/* ───────── News ───────── */
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 18px; }
+.filter {
+  padding: 7px 10px; font: 400 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--dim); border: 1px solid var(--faint);
+}
+.filter[aria-pressed='true'] { background: var(--white); border-color: var(--white); color: var(--black); }
+
+.news { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--faint); }
+.news__item a {
+  display: grid; grid-template-columns: 4ch minmax(0, 1fr); gap: 4px 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--faint);
+}
+.news__num {
+  align-self: start; justify-self: start; padding: 2px 4px; margin: -2px -4px;
+  font: 400 12px/1.4 var(--mono); letter-spacing: 0.08em; color: var(--dim);
+}
+.news__title { font-size: 15.5px; line-height: 1.38; letter-spacing: -0.005em; overflow-wrap: anywhere; }
+.news__meta { grid-column: 2; font: 400 11px/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.news__title, .news__meta { transition: color 400ms var(--ease); }
+@media (hover: hover) {
+  .news:hover .news__item a .news__title { color: var(--dim); }
+  .news .news__item a:hover .news__title, .news .news__item a:focus-visible .news__title { color: var(--white); }
+}
+.skeleton { color: var(--faint); font: 400 12px/1.6 var(--mono); white-space: pre; overflow: hidden; padding-top: 14px; }
+
+.state { padding: 18px 0; font: 400 12px/1.6 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.state .textbtn { margin-left: -8px; }
+
+/* ───────── Rates ───────── */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--faint); border: 1px solid var(--faint); }
+.stats__item { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 8px; padding: 16px 14px 14px; background: var(--black); min-width: 0; }
+.stats dd { font-size: clamp(20px, 1.8vw, 26px); line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stats dt { font: 400 11px/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.rates__foot { margin-top: 12px; }
+
+/* ───────── Links ───────── */
+.links { display: flex; flex-wrap: wrap; gap: 2px 6px; margin-left: -8px; }
+.links kbd { font: inherit; color: var(--dim); margin-right: 6px; }
+
+/* ───────── Notes ───────── */
+.notes {
+  width: 100%; min-height: 120px; resize: vertical; padding: 12px 14px;
+  background: transparent; color: var(--white); border: 1px solid var(--faint);
+  font: 400 13px/1.6 var(--mono); letter-spacing: 0.02em; outline: none;
+  transition: border-color 400ms var(--ease);
+}
+.notes:focus { border-color: var(--dim); }
+.notes::placeholder { color: var(--faint); }
+
+/* ───────── ASCII heat strip + footer ───────── */
+.ascii { container-type: inline-size; width: 100%; overflow: hidden; }
+.ascii pre {
+  margin: 0; font-family: var(--mono); font-weight: 400;
+  font-size: calc(100cqw / (var(--cols) * 0.6)); line-height: var(--lh);
+  letter-spacing: 0; white-space: pre; user-select: none;
+}
+.asciifield { margin-top: 48px; pointer-events: none; -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 100%); mask-image: linear-gradient(to top, #000 10%, transparent 100%); }
+.asciifield pre { opacity: 0.5; }
+
+.footer { border-top: 1px solid var(--faint); }
+.footer__inner {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
+  max-width: calc(var(--maxw) + var(--pad) * 2); margin: 0 auto; padding: 22px var(--pad);
+  font: 400 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);
+}
+.footer__right { justify-self: end; }
+
+/* Scramble */
+.scramble--idle > [aria-hidden='true'] { opacity: 0; }
+
+/* ───────── Accent: heat hover (pixel gradient wipes in left → right) ───────── */
+.textbtn, .nav__links a, .nav__links button, .nav__brand, .filter, .news__num {
+  position: relative; isolation: isolate;
+  transition: color 0ms linear 160ms, border-color 400ms var(--ease);
+}
+.textbtn::before, .nav__links a::before, .nav__links button::before, .nav__brand::before, .filter::before, .news__num::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: var(--heat-px, var(--heat)) left top / var(--heat-px-size, 100% 100%) repeat-y;
+  image-rendering: pixelated; clip-path: inset(0 100% 0 0);
+  transition: clip-path 420ms steps(7, end);
+}
+.textbtn:hover, .textbtn:focus-visible,
+.nav__links a:hover, .nav__links a:focus-visible,
+.nav__links button:hover, .nav__links button:focus-visible,
+.nav__brand:hover, .nav__brand:focus-visible,
+.filter:hover, .filter:focus-visible,
+.news__item a:hover .news__num, .news__item a:focus-visible .news__num { color: var(--black); }
+.textbtn:hover::before, .textbtn:focus-visible::before,
+.nav__links a:hover::before, .nav__links a:focus-visible::before,
+.nav__links button:hover::before, .nav__links button:focus-visible::before,
+.nav__brand:hover::before, .nav__brand:focus-visible::before,
+.filter:hover::before, .filter:focus-visible::before,
+.news__item a:hover .news__num::before, .news__item a:focus-visible .news__num::before { clip-path: inset(0 0 0 0); }
+.filter:hover { border-color: transparent; }
+.nav__brand:hover .dim, .nav__brand:focus-visible .dim { color: var(--black); }
+.nav__brand svg rect { transition: fill 0ms linear 160ms; }
+.nav__brand:hover svg rect, .nav__brand:focus-visible svg rect { fill: var(--black); }
+.nav__brand { padding: 6px 8px; margin: -6px -8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<canvas class="starfield" id="stars" aria-hidden="true"></canvas>
+
+<header class="nav">
+  <div class="nav__inner">
+    <a class="nav__brand" href="#" aria-label="Dashboard home">
+      <svg width="14" height="14" viewBox="-1 0 4 4" shape-rendering="crispEdges" aria-hidden="true">
+        <rect x="0.06" y="0.06" width="0.88" height="0.88" fill="#fff"/><rect x="0.06" y="1.06" width="0.88" height="0.88" fill="#fff"/>
+        <rect x="0.06" y="2.06" width="0.88" height="0.88" fill="#fff"/><rect x="0.06" y="3.06" width="0.88" height="0.88" fill="#fff"/>
+        <rect x="1.06" y="1.06" width="0.88" height="0.88" fill="#fff"/><rect x="1.06" y="2.06" width="0.88" height="0.88" fill="#fff"/>
+      </svg>
+      <span><span id="brandName">Marvell</span> <span class="dim">/ Dashboard</span></span>
+    </a>
+    <nav aria-label="Status">
+      <ul class="nav__links">
+        <li class="nav__wide"><span class="nav__status" id="navStatus">Syncing…</span></li>
+        <li><button class="nav__cta" id="refreshBtn" type="button" title="Refresh everything (R)">Refresh</button></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+
+    <!-- [01] TIME -->
+    <section class="panel p-time" aria-labelledby="greet">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><p class="label">[01] Time</p><p class="mono" id="tzLabel">WIB / GMT+7</p></div>
+      <h1 class="headline" id="greet">
+        <span class="scramble scramble--idle headline__sans" data-scramble id="greetA"><span aria-hidden="true">Good day,</span><span class="sr-only">Good day,</span></span>
+        <span class="scramble scramble--idle headline__serif" data-scramble data-delay="140" id="greetB"><span aria-hidden="true">Marvell.</span><span class="sr-only">Marvell.</span></span>
+      </h1>
+      <div class="clock" aria-live="off">
+        <span class="clock__hm" id="clockHM">--:--</span><span class="clock__s" id="clockS">:--</span>
+      </div>
+      <p class="mono time__meta"><span id="dateLine">—</span><span class="cursor" aria-hidden="true">_</span></p>
+
+      <div class="time__cols">
+        <div>
+          <p class="label" style="margin-bottom:12px">World clocks</p>
+          <dl class="specs" id="worldClocks"></dl>
+        </div>
+        <div>
+          <p class="label" style="margin-bottom:12px">Progress</p>
+          <dl class="specs" id="progress"></dl>
+        </div>
+      </div>
+
+      <div style="margin-top:28px">
+        <p class="label" style="margin-bottom:8px">Sun path</p>
+        <canvas class="sunarc" id="sunarc" aria-hidden="true"></canvas>
+        <div class="sunarc__labels mono"><span id="sunrise">Rise --:--</span><span id="sunNow">—</span><span id="sunset">Set --:--</span></div>
+      </div>
+    </section>
+
+    <!-- [02] WEATHER -->
+    <section class="panel p-weather wx" aria-labelledby="wxTitle">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="wxTitle">[02] Weather / <span id="wxPlace">Semarang</span></h2><p class="mono" id="wxUpdated">—</p></div>
+      <div class="wx__top">
+        <div>
+          <p class="wx__temp"><span id="wxTemp">--</span><sup>°C</sup></p>
+          <p class="wx__cond" id="wxCond">Loading sky</p>
+        </div>
+        <canvas class="wx__glyph" id="wxGlyph" width="168" height="126" aria-hidden="true"></canvas>
+      </div>
+      <dl class="specs" id="wxSpecs"></dl>
+      <div class="hourly" id="hourly" aria-label="Next 12 hours"></div>
+    </section>
+
+    <!-- [03] INDONESIA -->
+    <section class="panel p-news-id" aria-labelledby="newsIdTitle">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="newsIdTitle">[03] Indonesia</h2><p class="mono" data-updated="id">—</p></div>
+      <div class="filters" data-filters="id" role="group" aria-label="Indonesian news source"></div>
+      <ol class="news" data-news="id"></ol>
+    </section>
+
+    <!-- [04] WORLD -->
+    <section class="panel p-news-world" aria-labelledby="newsWorldTitle">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="newsWorldTitle">[04] World</h2><p class="mono" data-updated="world">—</p></div>
+      <div class="filters" data-filters="world" role="group" aria-label="World news source"></div>
+      <ol class="news" data-news="world"></ol>
+    </section>
+
+    <!-- [05] RATES -->
+    <section class="panel p-rates" aria-labelledby="ratesTitle">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="ratesTitle">[05] Rates → IDR</h2><p class="mono" id="ratesDate">—</p></div>
+      <dl class="stats" id="rates"></dl>
+      <p class="mono rates__foot" id="ratesFoot">Mid-market, daily</p>
+    </section>
+
+    <!-- [06] LINKS -->
+    <section class="panel p-links" aria-labelledby="linksTitle">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="linksTitle">[06] Jump to</h2><p class="mono">Keys 1–9</p></div>
+      <div class="links" id="links"></div>
+    </section>
+
+    <!-- [07] NOTES -->
+    <section class="panel p-notes" aria-labelledby="notesTitle">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="notesTitle"><label for="notes">[07] Notes</label></h2><p class="mono" id="notesState">N to focus</p></div>
+      <textarea class="notes" id="notes" spellcheck="false" placeholder="> today: ..."></textarea>
+    </section>
+
+  </div>
+</main>
+
+<div class="asciifield" id="asciifield" aria-hidden="true"><div class="ascii"><pre id="asciiPre" style="--cols:200;--lh:1.2"></pre></div></div>
+
+<footer class="footer">
+  <div class="footer__inner">
+    <span>© <span id="year"></span> <span id="footName">Marvell</span></span>
+    <svg width="12" height="12" viewBox="-1 0 4 4" shape-rendering="crispEdges" aria-hidden="true">
+      <rect x="0.06" y="0.06" width="0.88" height="0.88" fill="#fff"/><rect x="0.06" y="1.06" width="0.88" height="0.88" fill="#fff"/>
+      <rect x="0.06" y="2.06" width="0.88" height="0.88" fill="#fff"/><rect x="0.06" y="3.06" width="0.88" height="0.88" fill="#fff"/>
+      <rect x="1.06" y="1.06" width="0.88" height="0.88" fill="#fff"/><rect x="1.06" y="2.06" width="0.88" height="0.88" fill="#fff"/>
+    </svg>
+    <span class="footer__right">R refresh / N notes</span>
+  </div>
+</footer>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   CONFIG — everything you'd want to change lives here.
+   ───────────────────────────────────────────────────────────── */
+const CONFIG = {
+  name: 'Marvell',
+  place: { label: 'Semarang', lat: -6.9667, lon: 110.4167, tz: 'Asia/Jakarta', tzLabel: 'WIB / GMT+7' },
+  worldClocks: [
+    { label: 'Singapore', tz: 'Asia/Singapore' },
+    { label: 'London', tz: 'Europe/London' },
+    { label: 'New York', tz: 'America/New_York' },
+    { label: 'Los Angeles', tz: 'America/Los_Angeles' },
+  ],
+  rates: ['USD', 'SGD', 'EUR'],
+  news: {
+    id: [
+      { label: 'Detik', url: 'https://news.detik.com/berita/rss' },
+      { label: 'Antara', url: 'https://www.antaranews.com/rss/terkini.xml' },
+      { label: 'CNN ID', url: 'https://www.cnnindonesia.com/rss' },
+    ],
+    world: [
+      { label: 'Guardian', url: 'https://www.theguardian.com/world/rss' },
+      { label: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+      { label: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
+    ],
+  },
+  newsCount: 7,
+  links: [
+    { label: 'YouTube Studio', url: 'https://studio.youtube.com' },
+    { label: 'Drive', url: 'https://drive.google.com' },
+    { label: 'Gmail', url: 'https://mail.google.com' },
+    { label: 'Instagram', url: 'https://instagram.com' },
+    { label: 'Claude', url: 'https://claude.ai' },
+    { label: 'Portfolio', url: 'https://www.marvellkern.online' },
+    { label: 'EditorKanban', url: 'https://editor-kanban.vercel.app' },
+    { label: 'Frame.io', url: 'https://app.frame.io' },
+    { label: 'Chess.com', url: 'https://www.chess.com' },
+  ],
+  refresh: { weather: 10, news: 15, rates: 60 }, // minutes
+};
+
+/* ───────── Small helpers ───────── */
+const $ = (s, r = document) => r.querySelector(s);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem('dash:' + k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem('dash:' + k, JSON.stringify(v)); } catch {} },
+};
+const pad2 = (n) => String(n).padStart(2, '0');
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function decodeEntities(s) { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; }
+function ago(ts) {
+  const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+// Time parts in a given timezone.
+function partsIn(tz, d = new Date()) {
+  const f = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour12: false, year: 'numeric', month: 'short', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const o = {}; for (const p of f.formatToParts(d)) o[p.type] = p.value;
+  if (o.hour === '24') o.hour = '00';
+  return o;
+}
+async function fetchJSON(url, ms = 9000) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+
+/* ───────── 1-bit dither ───────── */
+const BAYER8 = Float32Array.from([0,32,8,40,2,34,10,42,48,16,56,24,50,18,58,26,12,44,4,36,14,46,6,38,60,28,52,20,62,30,54,22,3,35,11,43,1,33,9,41,51,19,59,27,49,17,57,25,15,47,7,39,13,45,5,37,63,31,55,23,61,29,53,21], (v) => (v + 0.5) / 64);
+const bayer = (x, y) => BAYER8[((y & 7) << 3) | (x & 7)];
+// Heat ramp, packed ABGR for canvas pixels (same values as the portfolio's black hole).
+const WHITE = 0xffffffff;
+const HEAT = [0xff145eff, 0xff1f8aff, 0xff3fcfff, 0xffa8f1ff, WHITE];
+const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/* ───────── Scramble text (same effect as the portfolio headings) ───────── */
+const GLYPHS = '.:-=+*#%@/\\<>_[]';
+function scramble(el, text, { duration = 520, onDone } = {}) {
+  const chars = [...text];
+  const settleAt = chars.map((_, i) => (i / Math.max(1, chars.length)) * 0.7 + Math.random() * 0.3);
+  const start = performance.now();
+  const tick = () => {
+    const p = (performance.now() - start) / duration;
+    if (p >= 1) { clearInterval(id); el.textContent = text; onDone && onDone(); return; }
+    el.textContent = chars.map((ch, i) => (ch === ' ' || p >= settleAt[i] ? ch : GLYPHS[(Math.random() * GLYPHS.length) | 0])).join('');
+  };
+  const id = setInterval(tick, 33); tick();
+  return () => clearInterval(id);
+}
+function setScramble(wrap, text, delay = 0) {
+  const vis = wrap.querySelector('[aria-hidden]'); const sr = wrap.querySelector('.sr-only');
+  sr.textContent = text;
+  if (reduced) { vis.textContent = text; wrap.classList.remove('scramble--idle'); return; }
+  setTimeout(() => { wrap.classList.remove('scramble--idle'); scramble(vis, text); }, delay);
+}
+
+/* ───────── Pixel heat hover (port of pixelHeat.js) ───────── */
+(function pixelHeat() {
+  const STOPS = [[0, '#ffffff'], [0.22, '#fff1a8'], [0.55, '#ffcf3f'], [1, '#ff8a1f']];
+  const SEL = '.textbtn, .nav__links a, .nav__links button, .nav__brand, .filter, .news__num';
+  const B4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
+  const cache = new Map();
+  function img(cols) {
+    if (cache.has(cols)) return cache.get(cols);
+    const c = document.createElement('canvas'); c.width = cols; c.height = 4;
+    const ctx = c.getContext('2d');
+    for (let x = 0; x < cols; x++) {
+      const t = cols === 1 ? 0 : x / (cols - 1);
+      let s = 0; while (s < STOPS.length - 2 && t > STOPS[s + 1][0]) s++;
+      const [p0, c0] = STOPS[s], [p1, c1] = STOPS[s + 1];
+      const f = (t - p0) / (p1 - p0);
+      for (let y = 0; y < 4; y++) { ctx.fillStyle = f > B4[(y & 3) * 4 + (x & 3)] ? c1 : c0; ctx.fillRect(x, y, 1, 1); }
+    }
+    const u = `url("${c.toDataURL()}")`; cache.set(cols, u); return u;
+  }
+  function paint(el) {
+    const r = el.getBoundingClientRect(); if (!r.width) return;
+    const px = r.height > 28 ? 3 : 2; const cols = Math.max(2, Math.ceil(r.width / px));
+    el.style.setProperty('--heat-px', img(cols)); el.style.setProperty('--heat-px-size', `${cols * px}px ${4 * px}px`);
+  }
+  const ro = new ResizeObserver((es) => es.forEach((e) => paint(e.target)));
+  const seen = new WeakSet();
+  const scan = (root) => root.querySelectorAll && root.querySelectorAll(SEL).forEach((el) => { if (seen.has(el)) return; seen.add(el); ro.observe(el); paint(el); });
+  window.addEventListener('DOMContentLoaded', () => {
+    scan(document);
+    new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => n.nodeType === 1 && (n.matches(SEL) ? scan(n.parentNode) : scan(n))))).observe(document.body, { childList: true, subtree: true });
+  });
+})();
+
+/* ───────── Starfield ───────── */
+function drawStars() {
+  const c = $('#stars'); const ctx = c.getContext('2d');
+  const w = innerWidth, h = innerHeight; c.width = w; c.height = h;
+  ctx.fillStyle = '#fff'; let s = 911;
+  const rand = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return (s >>> 0) / 4294967296; };
+  const n = Math.round((w * h) / 9000);
+  for (let i = 0; i < n; i++) { ctx.globalAlpha = rand() < 0.3 ? 0.9 : 0.45; const z = rand() < 0.15 ? 2 : 1; ctx.fillRect((rand() * w) | 0, (rand() * h) | 0, z, z); }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   [01] TIME
+   ───────────────────────────────────────────────────────────── */
+let lastGreeting = '';
+function greetingFor(h) {
+  if (h < 4) return 'Up late,';
+  if (h < 11) return 'Good morning,';
+  if (h < 15) return 'Good afternoon,';
+  if (h < 18) return 'Good evening,';
+  return 'Good night,';
+}
+function dayOfYear(y, mIdx, d) { return Math.round((Date.UTC(y, mIdx, d) - Date.UTC(y, 0, 1)) / 864e5) + 1; }
+function isoWeek(y, mIdx, d) {
+  const dt = new Date(Date.UTC(y, mIdx, d)); const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  return Math.ceil(((dt - y0) / 864e5 + 1) / 7);
+}
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function bar(p, n = 14) { const f = Math.round(p * n); return '[' + '#'.repeat(f) + '.'.repeat(n - f) + ']'; }
+
+function tickClock() {
+  const p = partsIn(CONFIG.place.tz);
+  const h = +p.hour, m = +p.minute, s = +p.second;
+  $('#clockHM').textContent = `${p.hour}:${p.minute}`;
+  $('#clockS').textContent = `:${p.second}`;
+  const y = +p.year, mi = MONTHS.indexOf(p.month), d = +p.day;
+  const doy = dayOfYear(y, mi, d);
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInYear = leap ? 366 : 365;
+  $('#dateLine').textContent = `${p.weekday} ${p.day} ${p.month} ${p.year} / Week ${isoWeek(y, mi, d)} / Day ${doy}`;
+  document.title = `${p.hour}:${p.minute} / ${CONFIG.name}`;
+
+  const g = greetingFor(h);
+  if (g !== lastGreeting) { setScramble($('#greetA'), g, lastGreeting ? 0 : 200); if (!lastGreeting) setScramble($('#greetB'), CONFIG.name + '.', 340); lastGreeting = g; }
+
+  if (s === 0 || !$('#worldClocks').children.length) renderSlowTime(h, m, y, mi, d, doy, daysInYear);
+}
+function renderSlowTime(h, m, y, mi, d, doy, daysInYear) {
+  const base = Date.now();
+  $('#worldClocks').innerHTML = CONFIG.worldClocks.map((c) => {
+    const p = partsIn(c.tz, new Date(base));
+    const diff = dayDiff(c.tz);
+    return `<div class="specs__row"><dt>${esc(c.label)}</dt><dd>${p.hour}:${p.minute} <span class="dim">${p.weekday}${diff}</span></dd></div>`;
+  }).join('');
+  const dayP = (h * 60 + m) / 1440;
+  const dim = new Date(Date.UTC(y, mi + 1, 0)).getUTCDate();
+  const monthP = (d - 1 + dayP) / dim;
+  const yearP = (doy - 1 + dayP) / daysInYear;
+  const wd = (new Date(Date.UTC(y, mi, d)).getUTCDay() + 6) % 7; // Mon = 0
+  const weekP = (wd + dayP) / 7;
+  const row = (k, p) => `<div class="specs__row"><dt>${k}</dt><dd>${bar(p)} <span class="dim">${pad2(Math.floor(p * 100))}%</span></dd></div>`;
+  $('#progress').innerHTML = row('Day', dayP) + row('Week', weekP) + row('Month', monthP) + row('Year', yearP);
+  drawSunArc();
+}
+function dayDiff(tz) {
+  const a = partsIn(CONFIG.place.tz), b = partsIn(tz);
+  const da = Date.UTC(+a.year, MONTHS.indexOf(a.month), +a.day), db = Date.UTC(+b.year, MONTHS.indexOf(b.month), +b.day);
+  const dd = Math.round((db - da) / 864e5);
+  return dd === 0 ? '' : dd > 0 ? ' +1' : ' -1';
+}
+
+/* Sun path: a dithered arc from sunrise to sunset, with the sun as a hot dot. */
+let sunTimes = null; // { rise: minutes, set: minutes }
+function drawSunArc() {
+  const c = $('#sunarc'); const r = c.getBoundingClientRect();
+  const W = Math.max(1, Math.round(r.width)), H = Math.max(1, Math.round(r.height));
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d'); const img = ctx.createImageData(W, H); const u = new Uint32Array(img.data.buffer);
+  const dot = (x, y, s, col) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x + s > W || y + s > H) return; for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) u[(y + j) * W + x + i] = col; };
+  const p = partsIn(CONFIG.place.tz); const now = +p.hour * 60 + +p.minute;
+  const rise = sunTimes ? sunTimes.rise : 5 * 60 + 30, set = sunTimes ? sunTimes.set : 17 * 60 + 40;
+  const horizon = H - 8, padX = 10, arcH = H - 22;
+  // Horizon: dotted line.
+  for (let x = 0; x < W; x += 4) dot(x, horizon, 1, 0xff7f7f7f);
+  const prog = (now - rise) / (set - rise);
+  const at = (t) => [padX + t * (W - padX * 2), horizon - Math.sin(t * Math.PI) * arcH];
+  // Arc: travelled part solid-ish, the rest sparse.
+  for (let i = 0; i <= 260; i++) {
+    const t = i / 260; const [x, y] = at(t);
+    const done = t <= prog;
+    if (!done && i % 3) continue;
+    dot(x, y, done ? 2 : 1, done ? HEAT[3] : 0xff9a9a9a);
+  }
+  const sr = $('#sunNow');
+  if (prog >= 0 && prog <= 1) {
+    const [sx, sy] = at(prog); const R = 9;
+    for (let y = -R * 2; y <= R * 2; y += 2) for (let x = -R * 2; x <= R * 2; x += 2) {
+      const d = Math.hypot(x, y);
+      const b = d < R ? 1 - (d / R) * 0.35 : Math.exp(-(d - R) / 4) * 0.55;
+      const px = Math.round(sx + x), py = Math.round(sy + y);
+      if (py > horizon - 1) continue;
+      if (b > bayer(px >> 1, py >> 1)) dot(px, py, 2, d < R * 0.45 ? WHITE : d < R * 0.8 ? HEAT[3] : d < R ? HEAT[2] : HEAT[1]);
+    }
+    const left = set - now; sr.textContent = `Daylight left ${Math.floor(left / 60)}h ${pad2(left % 60)}m`;
+  } else {
+    const until = now < rise ? rise - now : 1440 - now + rise;
+    sr.textContent = `Sunrise in ${Math.floor(until / 60)}h ${pad2(until % 60)}m`;
+  }
+  ctx.putImageData(img, 0, 0);
+  const fmt = (m) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
+  $('#sunrise').textContent = `Rise ${fmt(rise)}`; $('#sunset').textContent = `Set ${fmt(set)}`;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   [02] WEATHER (Open-Meteo, no key)
+   ───────────────────────────────────────────────────────────── */
+const WX = {
+  0: ['Clear sky', 'clear'], 1: ['Mostly clear', 'clear'], 2: ['Partly cloudy', 'partly'], 3: ['Overcast', 'cloud'],
+  45: ['Fog', 'fog'], 48: ['Rime fog', 'fog'],
+  51: ['Light drizzle', 'rain'], 53: ['Drizzle', 'rain'], 55: ['Heavy drizzle', 'rain'], 56: ['Freezing drizzle', 'rain'], 57: ['Freezing drizzle', 'rain'],
+  61: ['Light rain', 'rain'], 63: ['Rain', 'rain'], 65: ['Heavy rain', 'rain'], 66: ['Freezing rain', 'rain'], 67: ['Freezing rain', 'rain'],
+  71: ['Light snow', 'snow'], 73: ['Snow', 'snow'], 75: ['Heavy snow', 'snow'], 77: ['Snow grains', 'snow'],
+  80: ['Rain showers', 'rain'], 81: ['Rain showers', 'rain'], 82: ['Violent showers', 'rain'], 85: ['Snow showers', 'snow'], 86: ['Snow showers', 'snow'],
+  95: ['Thunderstorm', 'storm'], 96: ['Storm, hail', 'storm'], 99: ['Storm, heavy hail', 'storm'],
+};
+const WX_CHAR = { clear: '*', partly: '+', cloud: '=', fog: '-', rain: '/', snow: '.', storm: '!' };
+let glyphKind = 'cloud', glyphDay = true;
+
+async function loadWeather(force) {
+  const cached = store.get('weather');
+  if (cached) renderWeather(cached.data, cached.ts);
+  if (!force && cached && Date.now() - cached.ts < CONFIG.refresh.weather * 60000) return true;
+  const { lat, lon, tz } = CONFIG.place;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day,uv_index` +
+    `&hourly=temperature_2m,precipitation_probability,weather_code,is_day` +
+    `&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&timezone=${encodeURIComponent(tz)}&forecast_days=2`;
+  try {
+    const data = await fetchJSON(url);
+    store.set('weather', { ts: Date.now(), data });
+    renderWeather(data, Date.now());
+    return true;
+  } catch (e) {
+    if (!cached) $('#wxCond').textContent = 'Signal lost';
+    return false;
+  }
+}
+function renderWeather(d, ts) {
+  const c = d.current; const [cond, kind] = WX[c.weather_code] || ['Unknown', 'cloud'];
+  $('#wxTemp').textContent = Math.round(c.temperature_2m);
+  $('#wxCond').textContent = cond;
+  $('#wxPlace').textContent = CONFIG.place.label;
+  $('#wxUpdated').textContent = ago(ts);
+  $('#wxUpdated').dataset.ts = ts;
+  glyphKind = kind; glyphDay = !!c.is_day;
+  const dl = d.daily;
+  const hm = (iso) => iso.slice(11, 16);
+  const row = (k, v) => `<div class="specs__row"><dt>${k}</dt><dd>${v}</dd></div>`;
+  $('#wxSpecs').innerHTML =
+    row('Feels like', `${Math.round(c.apparent_temperature)}°C`) +
+    row('High / low', `${Math.round(dl.temperature_2m_max[0])}° <span class="dim">/ ${Math.round(dl.temperature_2m_min[0])}°</span>`) +
+    row('Rain today', `${dl.precipitation_probability_max[0] ?? '--'}%`) +
+    row('Humidity', `${c.relative_humidity_2m}%`) +
+    row('Wind', `${Math.round(c.wind_speed_10m)} km/h`) +
+    row('UV index', c.uv_index != null ? `${Math.round(c.uv_index)}` : '--');
+
+  const toMin = (iso) => +iso.slice(11, 13) * 60 + +iso.slice(14, 16);
+  sunTimes = { rise: toMin(dl.sunrise[0]), set: toMin(dl.sunset[0]) };
+  drawSunArc();
+
+  // Next 12 hours, as ASCII columns.
+  const nowKey = partsIn(CONFIG.place.tz);
+  const key = `${nowKey.year}-${pad2(MONTHS.indexOf(nowKey.month) + 1)}-${nowKey.day}T${nowKey.hour}:00`;
+  let start = d.hourly.time.indexOf(key); if (start < 0) start = 0;
+  const RAMP = ' .:-=+*#%@';
+  let html = '';
+  for (let i = start; i < Math.min(start + 12, d.hourly.time.length); i++) {
+    const pr = d.hourly.precipitation_probability[i] ?? 0;
+    const k = (WX[d.hourly.weather_code[i]] || ['', 'cloud'])[1];
+    const ch = k === 'clear' && d.hourly.is_day && !d.hourly.is_day[i] ? ')' : WX_CHAR[k];
+    // 4-row meter: fills bottom-up, partial cells use the density ramp.
+    let meter = ''; const lv = (pr / 100) * 4;
+    for (let r = 3; r >= 0; r--) { const f = Math.max(0, Math.min(1, lv - r)); meter += (f >= 1 ? '#' : f > 0 ? RAMP[Math.max(1, Math.round(f * 7))] : '.') + (r ? '\n' : ''); }
+    html += `<div class="hourly__col${i === start ? ' is-now' : ''}${pr >= 40 ? ' wet' : ''}" title="${esc((WX[d.hourly.weather_code[i]] || [''])[0])}, ${pr}% rain">
+      <span>${i === start ? 'NOW' : d.hourly.time[i].slice(11, 13)}</span><span>${ch}</span><span>${Math.round(d.hourly.temperature_2m[i])}°</span>
+      <span class="hourly__bar">${meter}</span><span>${pr}%</span></div>`;
+  }
+  $('#hourly').innerHTML = html;
+}
+
+/* Animated 1-bit weather glyph */
+function startGlyph() {
+  const c = $('#wxGlyph'); const ctx = c.getContext('2d');
+  const W = c.width, H = c.height; const img = ctx.createImageData(W, H); const u = new Uint32Array(img.data.buffer);
+  const CELL = 3, DOT = 2;
+  const dot = (x, y, col) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x + DOT > W || y + DOT > H) return; for (let j = 0; j < DOT; j++) for (let i = 0; i < DOT; i++) u[(y + j) * W + x + i] = col; };
+  // Rain / snow particles.
+  const drops = Array.from({ length: 34 }, (_, i) => ({ x: (i * 37) % W, y: (i * 53) % H, v: 0.9 + ((i * 7) % 5) * 0.15 }));
+  const clouds = [[0.5, 0.42, 0.2], [0.33, 0.5, 0.15], [0.67, 0.5, 0.16], [0.43, 0.33, 0.14], [0.58, 0.32, 0.12]];
+  function cloudAt(x, y, t, ox = 0, oy = 0, sc = 1) {
+    const drift = Math.sin(t * 0.25) * 4;
+    let v = 0;
+    for (const [cx, cy, r] of clouds) {
+      const dx = x - (cx * W * sc + ox + drift), dy = (y - (cy * H * sc + oy)) * 1.15;
+      const R = r * W * sc; v = Math.max(v, smoothstep(R, R * 0.72, Math.hypot(dx, dy)));
+    }
+    const base = (0.62 * H) * sc + oy; if (y > base) v *= smoothstep(base + 6, base, y);
+    return v;
+  }
+  let raf = 0, last = 0;
+  function frame(now) {
+    raf = requestAnimationFrame(frame);
+    if (now - last < 50) return; last = now;
+    const t = reduced ? 0 : now / 1000;
+    u.fill(0);
+    const kind = glyphKind, day = glyphDay;
+    const sunCx = kind === 'partly' ? W * 0.36 : W * 0.5, sunCy = kind === 'partly' ? H * 0.36 : H * 0.48, sunR = kind === 'partly' ? H * 0.2 : H * 0.24;
+    for (let j = 0; j * CELL < H; j++) for (let i = 0; i * CELL < W; i++) {
+      const x = i * CELL, y = j * CELL, th = bayer(i, j);
+      let b = 0, col = WHITE;
+      if (kind === 'clear' || kind === 'partly') {
+        const dx = x - sunCx, dy = y - sunCy, d = Math.hypot(dx, dy);
+        if (day) {
+          const a = Math.atan2(dy, dx);
+          const core = d < sunR ? 1.05 - (d / sunR) * 0.25 : 0;
+          const ray = d > sunR * 1.15 ? Math.pow(Math.max(0, Math.cos(a * 6 + t * 0.4)), 10) * Math.exp(-(d - sunR) / (sunR * 0.7)) * 0.95 : 0;
+          const glow = d >= sunR ? Math.exp(-(d - sunR) / (sunR * 0.28)) * 0.6 : 0;
+          b = core + ray + glow;
+          const k = d / sunR;
+          col = k < 0.45 ? WHITE : k < 0.8 ? HEAT[3] : k < 1.05 ? HEAT[2] : k < 1.6 ? HEAT[1] : HEAT[0];
+        } else {
+          const d2 = Math.hypot(dx - sunR * 0.45, dy + sunR * 0.25);
+          b = d < sunR && d2 > sunR * 0.82 ? 1 - (d / sunR) * 0.3 : 0;
+          if (!b && ((i * 73856093) ^ (j * 19349663)) % 97 === 0) b = 0.5 + 0.5 * Math.sin(t * 2 + i);
+          col = WHITE;
+        }
+        if (kind === 'partly') {
+          const cv = cloudAt(x, y, t, W * 0.12, H * 0.14, 0.85);
+          if (cv > 0.05) { b = cv * (0.5 + 0.5 * (1 - (y - H * 0.3) / (H * 0.6))); col = WHITE; }
+        }
+      } else if (kind === 'fog') {
+        b = (0.5 + 0.5 * Math.sin(y * 0.22 + Math.sin(x * 0.03 + t * 0.5) * 2)) * 0.7 * smoothstep(0, 18, Math.min(x, W - x));
+      } else {
+        const oy = kind === 'cloud' ? 0 : -H * 0.14;
+        const cv = cloudAt(x, y, t, 0, oy);
+        b = cv * (0.42 + 0.58 * (1 - (y - (H * 0.2 + oy)) / (H * 0.5)));
+        if (kind === 'storm' || kind === 'rain') b *= 0.8;
+      }
+      if (b > th) dot(x, y, col);
+    }
+    if (kind === 'rain' || kind === 'storm' || kind === 'snow') {
+      for (const p of drops) {
+        if (!reduced) { p.y += (kind === 'snow' ? 0.8 : 4.2) * p.v; if (kind === 'snow') p.x += Math.sin(t + p.v * 9) * 0.4; }
+        if (p.y > H) { p.y = H * 0.45; p.x = (p.x + 29) % W; }
+        if (p.y < H * 0.45 || p.x < W * 0.18 || p.x > W * 0.82) continue;
+        if (kind === 'snow') dot(p.x, p.y, WHITE);
+        else { dot(p.x, p.y, HEAT[3]); dot(p.x - 1, p.y - 4, 0xffbdbdbd); }
+      }
+    }
+    if (kind === 'storm' && !reduced && (t % 3.2) < 0.18) {
+      const pts = [[0.52, 0.5], [0.45, 0.66], [0.53, 0.66], [0.44, 0.86]];
+      for (let k = 0; k < pts.length - 1; k++) {
+        const [x0, y0] = pts[k], [x1, y1] = pts[k + 1];
+        for (let s = 0; s <= 1; s += 0.06) dot((x0 + (x1 - x0) * s) * W, (y0 + (y1 - y0) * s) * H, HEAT[2]);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    if (reduced) cancelAnimationFrame(raf);
+  }
+  raf = requestAnimationFrame(frame);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelAnimationFrame(raf); else if (!reduced) raf = requestAnimationFrame(frame); });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   [03][04] NEWS (RSS via rss2json, allorigins as fallback)
+   ───────────────────────────────────────────────────────────── */
+const newsState = { id: store.get('src:id') || 0, world: store.get('src:world') || 0 };
+
+async function fetchFeed(url) {
+  try {
+    const j = await fetchJSON('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url));
+    if (j.status !== 'ok' || !j.items?.length) throw new Error('rss2json');
+    return j.items.map((it) => ({ title: decodeEntities(it.title || ''), link: it.link, ts: Date.parse((it.pubDate || '').replace(' ', 'T') + 'Z') || Date.now() }));
+  } catch {
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 9000);
+    const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), { signal: ctl.signal }); clearTimeout(tm);
+    const xml = new DOMParser().parseFromString(await r.text(), 'text/xml');
+    const nodes = [...xml.querySelectorAll('item, entry')];
+    if (!nodes.length) throw new Error('empty');
+    return nodes.map((n) => {
+      const linkEl = n.querySelector('link');
+      return {
+        title: decodeEntities(n.querySelector('title')?.textContent || ''),
+        link: linkEl?.getAttribute('href') || linkEl?.textContent || '#',
+        ts: Date.parse(n.querySelector('pubDate, published, updated')?.textContent || '') || Date.now(),
+      };
+    });
+  }
+}
+
+function renderFilters(group) {
+  const box = $(`[data-filters="${group}"]`);
+  box.innerHTML = CONFIG.news[group].map((s, i) => `<button class="filter" type="button" aria-pressed="${i === newsState[group]}" data-i="${i}">${esc(s.label)}</button>`).join('');
+  box.onclick = (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    newsState[group] = +b.dataset.i; store.set('src:' + group, newsState[group]);
+    box.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    loadNews(group, false, true);
+  };
+}
+function skeleton() {
+  const R = ' .:-=+*#%@'; let s = '';
+  for (let r = 0; r < 14; r++) { for (let c = 0; c < 60; c++) s += R[(Math.sin(c * 0.4 + r * 1.3) * 0.5 + 0.5) * 3 | 0]; s += '\n'; }
+  return `<li class="skeleton" aria-hidden="true">${s}</li>`;
+}
+async function loadNews(group, force, animate) {
+  const src = CONFIG.news[group][newsState[group]]; const key = 'news:' + src.url;
+  const list = $(`[data-news="${group}"]`); const upd = $(`[data-updated="${group}"]`);
+  const cached = store.get(key);
+  if (cached) renderNews(group, cached.items, cached.ts, animate);
+  else list.innerHTML = skeleton();
+  if (!force && cached && Date.now() - cached.ts < CONFIG.refresh.news * 60000) return true;
+  try {
+    const items = (await fetchFeed(src.url)).filter((x) => x.title).slice(0, CONFIG.newsCount);
+    store.set(key, { ts: Date.now(), items });
+    if (CONFIG.news[group][newsState[group]] === src) renderNews(group, items, Date.now(), !cached || animate);
+    return true;
+  } catch {
+    if (!cached && CONFIG.news[group][newsState[group]] === src) {
+      list.innerHTML = `<li class="state">Signal lost: ${esc(src.label)} didn't answer.<br><button class="textbtn" type="button">[ Retry ↻ ]</button></li>`;
+      list.querySelector('button').onclick = () => loadNews(group, true, true);
+      upd.textContent = 'Offline';
+    }
+    return false;
+  }
+}
+function renderNews(group, items, ts, animate) {
+  const list = $(`[data-news="${group}"]`);
+  list.innerHTML = items.map((it, i) => `<li class="news__item"><a href="${esc(it.link)}" target="_blank" rel="noopener">
+    <span class="news__num">${pad2(i + 1)}</span><span class="news__title">${esc(it.title)}</span>
+    <span class="news__meta">${esc(CONFIG.news[group][newsState[group]].label)} / ${ago(it.ts)}</span></a></li>`).join('');
+  const upd = $(`[data-updated="${group}"]`); upd.textContent = ago(ts); upd.dataset.ts = ts;
+  if (animate && !reduced) list.querySelectorAll('.news__title').forEach((el, i) => { const t = el.textContent; el.textContent = ''; setTimeout(() => scramble(el, t, { duration: 380 }), i * 45); });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   [05] RATES (Frankfurter / ECB, fallback open.er-api.com)
+   ───────────────────────────────────────────────────────────── */
+async function loadRates(force) {
+  const cached = store.get('rates');
+  if (cached) renderRates(cached);
+  if (!force && cached && Date.now() - cached.ts < CONFIG.refresh.rates * 60000) return true;
+  try {
+    let out;
+    try {
+      const j = await fetchJSON(`https://api.frankfurter.app/latest?from=IDR&to=${CONFIG.rates.join(',')}`);
+      out = { date: j.date, rates: Object.fromEntries(CONFIG.rates.map((c) => [c, 1 / j.rates[c]])) };
+    } catch {
+      const j = await fetchJSON('https://open.er-api.com/v6/latest/IDR');
+      out = { date: (j.time_last_update_utc || '').slice(5, 16), rates: Object.fromEntries(CONFIG.rates.map((c) => [c, 1 / j.rates[c]])) };
+    }
+    const prev = cached?.rates || store.get('ratesPrev');
+    const data = { ts: Date.now(), ...out, prev: cached && cached.date !== out.date ? cached.rates : cached?.prev };
+    store.set('rates', data); renderRates(data);
+    return true;
+  } catch {
+    if (!cached) $('#rates').innerHTML = `<div class="stats__item" style="grid-column:1/-1"><dd class="mono">Signal lost</dd><dt>Rates unavailable</dt></div>`;
+    return false;
+  }
+}
+function renderRates(d) {
+  $('#rates').innerHTML = CONFIG.rates.map((c) => {
+    const v = d.rates[c]; const p = d.prev?.[c];
+    const delta = p ? ((v - p) / p) * 100 : null;
+    const arrow = delta == null ? '' : ` ${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}%`;
+    return `<div class="stats__item"><dd>${Math.round(v).toLocaleString('id-ID')}</dd><dt>1 ${c}${arrow}</dt></div>`;
+  }).join('');
+  $('#ratesDate').textContent = d.date || '—';
+}
+
+/* ───────── [06] Links ───────── */
+function renderLinks() {
+  $('#links').innerHTML = CONFIG.links.map((l, i) => `<a class="textbtn" href="${esc(l.url)}" target="_blank" rel="noopener">[ ${i < 9 ? `<kbd>${i + 1}</kbd>` : ''}${esc(l.label)} ↗ ]</a>`).join('');
+}
+
+/* ───────── [07] Notes ───────── */
+function initNotes() {
+  const ta = $('#notes'); const st = $('#notesState');
+  ta.value = store.get('notes') || '';
+  let t;
+  ta.addEventListener('input', () => { st.textContent = 'Typing…'; clearTimeout(t); t = setTimeout(() => { store.set('notes', ta.value); st.textContent = 'Saved'; }, 400); });
+}
+
+/* ───────── ASCII heat strip (same terrain as the portfolio's Contact) ───────── */
+function startAsciiField() {
+  const COLS = 200, ROWS = 12, RAMP = ' .:-=+*#%@';
+  const ROW_HEAT = ['#ffffff', '#fff1a8', '#ffcf3f', '#ff8a1f', '#ff5e14'];
+  const pre = $('#asciiPre');
+  function render(t) {
+    let html = '';
+    for (let r = 0; r < ROWS; r++) {
+      let line = ''; const v = r / (ROWS - 1);
+      for (let c = 0; c < COLS; c++) {
+        const u = c / COLS;
+        const h = 0.5 + 0.22 * Math.sin(u * 9 + t * 0.35) + 0.14 * Math.sin(u * 23 - t * 0.5 + 1.3) + 0.08 * Math.sin(u * 51 + t * 0.8);
+        const b = Math.max(0, Math.min(1, (v - (1 - h * 0.8)) * 1.6)) * v * 0.7;
+        line += RAMP[Math.min(RAMP.length - 1, Math.round(b * (RAMP.length - 1)))];
+      }
+      html += `<span style="color:${ROW_HEAT[Math.min(4, Math.floor((r / ROWS) * 5))]}">${line}${r < ROWS - 1 ? '\n' : ''}</span>`;
+    }
+    pre.innerHTML = html;
+  }
+  render(0);
+  if (reduced) return;
+  let t = 0; let visible = true;
+  new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe($('#asciifield'));
+  setInterval(() => { if (!visible || document.hidden) return; t += 0.16; render(t); }, 160);
+}
+
+/* ───────── Refresh + status ───────── */
+let syncing = false;
+async function refreshAll(force) {
+  if (syncing) return; syncing = true;
+  const s = $('#navStatus'); s.textContent = 'Syncing…';
+  const res = await Promise.all([loadWeather(force), loadRates(force), loadNews('id', force), loadNews('world', force)]);
+  const ok = res.filter(Boolean).length;
+  const p = partsIn(CONFIG.place.tz);
+  s.textContent = ok === res.length ? `Synced ${p.hour}:${p.minute}` : `${ok}/${res.length} sources live`;
+  syncing = false;
+}
+function tickAgo() {
+  document.querySelectorAll('[data-ts]').forEach((el) => (el.textContent = ago(+el.dataset.ts)));
+}
+
+/* ───────── Boot ───────── */
+window.addEventListener('DOMContentLoaded', () => {
+  $('#brandName').textContent = CONFIG.name; $('#footName').textContent = CONFIG.name;
+  $('#tzLabel').textContent = CONFIG.place.tzLabel; $('#year').textContent = partsIn(CONFIG.place.tz).year;
+  drawStars(); addEventListener('resize', () => { drawStars(); drawSunArc(); });
+  renderFilters('id'); renderFilters('world'); renderLinks(); initNotes();
+  tickClock(); setInterval(tickClock, 1000);
+  startGlyph(); startAsciiField();
+  refreshAll(false);
+  setInterval(() => refreshAll(false), 5 * 60000);
+  setInterval(tickAgo, 30000);
+  $('#refreshBtn').onclick = () => refreshAll(true);
+
+  addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    const tag = e.target?.tagName; if (tag === 'INPUT' || tag === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
+    const k = e.key.toLowerCase();
+    if (k === 'r') refreshAll(true);
+    else if (k === 'n') { e.preventDefault(); $('#notes').focus(); }
+    else if (/^[1-9]$/.test(k) && CONFIG.links[+k - 1]) window.open(CONFIG.links[+k - 1].url, '_blank', 'noopener');
+  });
+});
+</script>
+</body>
+</html>
