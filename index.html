@@ -183,11 +183,11 @@ ul { list-style: none; padding: 0; }
 .state .textbtn { margin-left: -8px; }
 
 /* ───────── Brief (Groq) ───────── */
-@media (min-width: 1200px) { .p-brief { grid-column: span 8; grid-row: span 3; } }
-@media (min-width: 900px) and (max-width: 1199px) { .p-brief { grid-column: span 12; } }
+@media (min-width: 900px) { .p-brief { grid-column: span 4; grid-row: span 3; } }
+@media (min-width: 900px) and (max-width: 1199px) { .p-brief { grid-column: span 6; grid-row: auto; } }
 body:not(.mode-raw) .p-news-id, body:not(.mode-raw) .p-news-world { display: none; }
 body.mode-raw .p-brief { display: none; }
-.brief__tldr { max-width: 46ch; font-family: var(--serif); font-size: clamp(1.45rem, 2.2vw, 2rem); line-height: 1.12; letter-spacing: -0.005em; }
+.brief__tldr { margin-bottom: 26px; font-family: var(--serif); font-size: clamp(1.35rem, 1.8vw, 1.7rem); line-height: 1.12; letter-spacing: -0.005em; }
 .brief__cols { display: grid; gap: 32px 40px; margin-top: 30px; }
 @media (min-width: 700px) { .brief__cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 .brief__col .label { margin-bottom: 10px; }
@@ -350,16 +350,22 @@ body.mode-raw .p-brief { display: none; }
       <div class="hourly" id="hourly" aria-label="Next 12 hours"></div>
     </section>
 
-    <!-- [03] BRIEF -->
-    <section class="panel p-brief" aria-labelledby="briefTitle">
+    <!-- [03] BRIEF INDONESIA -->
+    <section class="panel p-brief" aria-labelledby="brief-indonesia-title">
       <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
-      <div class="panel__head"><h2 class="label" id="briefTitle">[03] Today's brief</h2><p class="mono"><span data-brief-updated>—</span> <button class="textbtn toggle" type="button" data-toggle-mode>[ All headlines ]</button></p></div>
-      <p class="brief__tldr" id="briefTldr">Reading the news for you…</p>
-      <div class="brief__cols">
-        <div class="brief__col"><p class="label">Indonesia</p><ol class="brief__list" data-brief="indonesia"></ol></div>
-        <div class="brief__col"><p class="label">World</p><ol class="brief__list" data-brief="world"></ol></div>
-      </div>
-      <p class="mono brief__note" id="briefNote">Summarised by Groq from Detik, Antara, CNN ID, Guardian, Al Jazeera, The Verge</p>
+      <div class="panel__head"><h2 class="label" id="brief-indonesia-title">[03] Indonesia</h2><p class="mono"><span data-brief-updated>—</span> <button class="textbtn toggle" type="button" data-toggle-mode>[ All ]</button></p></div>
+      <p class="brief__tldr" data-brief-tldr="indonesia">Reading the news for you…</p>
+      <ol class="brief__list" data-brief="indonesia"></ol>
+      <p class="mono brief__note" data-brief-note>Summarised by Groq / Detik, Antara, CNN ID</p>
+    </section>
+
+    <!-- [04] BRIEF WORLD -->
+    <section class="panel p-brief" aria-labelledby="brief-world-title">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="brief-world-title">[04] World</h2><p class="mono"><span data-brief-updated>—</span> <button class="textbtn toggle" type="button" data-toggle-mode>[ All ]</button></p></div>
+      <p class="brief__tldr" data-brief-tldr="world">Reading the news for you…</p>
+      <ol class="brief__list" data-brief="world"></ol>
+      <p class="mono brief__note" data-brief-note>Summarised by Groq / Guardian, Al Jazeera, The Verge</p>
     </section>
 
     <!-- [03] INDONESIA -->
@@ -373,7 +379,7 @@ body.mode-raw .p-brief { display: none; }
     <!-- [04] WORLD -->
     <section class="panel p-news-world" aria-labelledby="newsWorldTitle">
       <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
-      <div class="panel__head"><h2 class="label" id="newsWorldTitle">[04] World</h2><p class="mono" data-updated="world">—</p></div>
+      <div class="panel__head"><h2 class="label" id="newsWorldTitle">[04] World</h2><p class="mono"><span data-updated="world">—</span> <button class="textbtn toggle" type="button" data-toggle-mode>[ Brief ]</button></p></div>
       <div class="filters" data-filters="world" role="group" aria-label="World news source"></div>
       <ol class="news" data-news="world"></ol>
     </section>
@@ -907,35 +913,37 @@ function setMode(raw) {
   store.set('mode', raw ? 'raw' : 'brief');
 }
 async function loadBrief(force) {
-  const cached = store.get('brief');
+  const cached = store.get('brief2');
   if (cached) renderBrief(cached);
   if (!force && cached && Date.now() - cached.generatedAt < 30 * 60000) return true;
   try {
     const r = await fetch(BRIEF_URL + (force ? '?t=' + Math.floor(Date.now() / 60000) : ''), { signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined });
     const j = await r.json();
     if (!r.ok) throw Object.assign(new Error(j.message || j.error), { code: j.error });
-    store.set('brief', j); renderBrief(j, !cached || cached.generatedAt !== j.generatedAt);
+    store.set('brief2', j); renderBrief(j, !cached || cached.generatedAt !== j.generatedAt);
     return true;
   } catch (e) {
     if (!cached) {
-      $('#briefTldr').textContent = e.code === 'no_key' ? 'Brief is off: no Groq key set yet.' : 'Couldn’t write the brief right now.';
-      $('#briefNote').textContent = e.code === 'no_key' ? 'Add GROQ_API_KEY in Vercel → Settings → Environment Variables, then redeploy.' : 'Use [ All headlines ] for now. ' + String(e.message || '').slice(0, 140);
+      document.querySelectorAll('[data-brief-tldr]').forEach((el) => (el.textContent = e.code === 'no_key' ? 'Brief is off: no Groq key set yet.' : 'Couldn’t write the brief right now.'));
+      document.querySelectorAll('[data-brief-note]').forEach((el) => (el.textContent = e.code === 'no_key' ? 'Add GROQ_API_KEY in Vercel → Settings → Environment Variables, then redeploy.' : 'Use [ All ] for now. ' + String(e.message || '').slice(0, 140)));
     }
     return false;
   }
 }
 function renderBrief(b, animate) {
-  if (b.tldr) {
-    const el = $('#briefTldr');
-    if (animate && !reduced) scramble(el, b.tldr, { duration: 700 }); else el.textContent = b.tldr;
-  }
+  // Older cached briefs had one combined tldr string; newer ones have one per region.
+  const tl = typeof b.tldr === 'string' ? { indonesia: b.tldr, world: '' } : b.tldr || {};
   for (const g of ['indonesia', 'world']) {
+    const el = document.querySelector(`[data-brief-tldr="${g}"]`);
+    const text = tl[g] || '';
+    el.hidden = !text;
+    if (text) { if (animate && !reduced) scramble(el, text, { duration: 700 }); else el.textContent = text; }
     $(`[data-brief="${g}"]`).innerHTML = (b[g] || []).map((it, i) => `<li class="brief__item"><a href="${esc(it.link)}" target="_blank" rel="noopener" title="${esc(it.original || '')}">
       <span class="news__num">${pad2(i + 1)}</span><span class="brief__head">${esc(it.headline)}</span>
       <span class="brief__sum">${esc(it.summary)}</span><span class="brief__meta">${esc(it.source)} / ${ago(it.ts)} / Read ↗</span></a></li>`).join('');
   }
-  const u = document.querySelector('[data-brief-updated]'); u.textContent = ago(b.generatedAt); u.dataset.ts = b.generatedAt;
-  $('#briefNote').textContent = 'Summarised by Groq from Detik, Antara, CNN ID, Guardian, Al Jazeera, The Verge';
+  document.querySelectorAll('[data-brief-updated]').forEach((u) => { u.textContent = ago(b.generatedAt); u.dataset.ts = b.generatedAt; });
+  document.querySelectorAll('[data-brief-note]').forEach((el, i) => (el.textContent = 'Summarised by Groq / ' + (i ? 'Guardian, Al Jazeera, The Verge' : 'Detik, Antara, CNN ID')));
 }
 
 /* ─────────────────────────────────────────────────────────────

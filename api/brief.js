@@ -82,9 +82,11 @@ For each pick give:
 - "id": the exact id, e.g. "I3"
 - "headline": max 9 words, plain words, no clickbait
 - "summary": one sentence, max 24 words, what happened and why it matters
-Also give "tldr": one sentence, max 22 words, the overall picture today.
+Also give two one-line overviews, each one sentence, max 20 words:
+- "tldr_indonesia": the overall picture in Indonesia today (only Indonesian stories)
+- "tldr_world": the overall picture in the rest of the world today (only world stories)
 
-Reply with JSON only: {"tldr": "...", "indonesia": [{"id","headline","summary"}], "world": [{"id","headline","summary"}]}
+Reply with JSON only: {"tldr_indonesia": "...", "tldr_world": "...", "indonesia": [{"id","headline","summary"}], "world": [{"id","headline","summary"}]}
 
 INDONESIA
 ${list('indonesia')}
@@ -177,7 +179,7 @@ export default async function handler(req, res) {
         .filter((x, i, a) => a.findIndex((y) => y.link === x.link) === i)
         .slice(0, PICK);
 
-    const out = { generatedAt: Date.now(), model: ai._model, tldr: String(ai.tldr || ''), indonesia: pick('indonesia'), world: pick('world') };
+    const out = { generatedAt: Date.now(), model: ai._model, tldr: { indonesia: String(ai.tldr_indonesia || ''), world: String(ai.tldr_world || '') }, indonesia: pick('indonesia'), world: pick('world') };
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
     return res.status(200).json(out);
   } catch (e) {
