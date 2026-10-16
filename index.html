@@ -869,21 +869,23 @@ function renderNews(group, items, ts, animate) {
    [05] RATES (Frankfurter / ECB, fallback open.er-api.com)
    ───────────────────────────────────────────────────────────── */
 async function loadRates(force) {
-  const cached = store.get('rates');
+  const cached = store.get('rates2');
   if (cached) renderRates(cached);
   if (!force && cached && Date.now() - cached.ts < CONFIG.refresh.rates * 60000) return true;
   try {
     let out;
+    const want = CONFIG.rates.filter((c) => c !== 'EUR');
     try {
-      const j = await fetchJSON(`https://api.frankfurter.app/latest?from=IDR&to=${CONFIG.rates.join(',')}`);
-      out = { date: j.date, rates: Object.fromEntries(CONFIG.rates.map((c) => [c, 1 / j.rates[c]])) };
+      // Ask with EUR as the base (full precision), then cross: X→IDR = IDR per EUR / X per EUR.
+      const j = await fetchJSON(`https://api.frankfurter.app/latest?from=EUR&to=${['IDR', ...want].join(',')}`);
+      const r = { ...j.rates, EUR: 1 };
+      out = { date: j.date, rates: Object.fromEntries(CONFIG.rates.map((c) => [c, r.IDR / r[c]])) };
     } catch {
-      const j = await fetchJSON('https://open.er-api.com/v6/latest/IDR');
-      out = { date: (j.time_last_update_utc || '').slice(5, 16), rates: Object.fromEntries(CONFIG.rates.map((c) => [c, 1 / j.rates[c]])) };
+      const j = await fetchJSON('https://open.er-api.com/v6/latest/USD');
+      out = { date: (j.time_last_update_utc || '').slice(5, 16), rates: Object.fromEntries(CONFIG.rates.map((c) => [c, j.rates.IDR / j.rates[c]])) };
     }
-    const prev = cached?.rates || store.get('ratesPrev');
     const data = { ts: Date.now(), ...out, prev: cached && cached.date !== out.date ? cached.rates : cached?.prev };
-    store.set('rates', data); renderRates(data);
+    store.set('rates2', data); renderRates(data);
     return true;
   } catch {
     if (!cached) $('#rates').innerHTML = `<div class="stats__item" style="grid-column:1/-1"><dd class="mono">Signal lost</dd><dt>Rates unavailable</dt></div>`;
