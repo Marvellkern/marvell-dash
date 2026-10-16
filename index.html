@@ -329,7 +329,7 @@ body.mode-raw .p-brief { display: none; }
       </div>
 
       <div style="margin-top:28px">
-        <p class="label" style="margin-bottom:8px">Sun path</p>
+        <p class="label" style="margin-bottom:8px" id="sunLabel">Sun path</p>
         <canvas class="sunarc" id="sunarc" aria-hidden="true"></canvas>
         <div class="sunarc__labels mono"><span id="sunrise">Rise --:--</span><span id="sunNow">—</span><span id="sunset">Set --:--</span></div>
       </div>
@@ -576,8 +576,8 @@ let lastGreeting = '';
 function greetingFor(h) {
   if (h < 4) return 'Up late,';
   if (h < 11) return 'Good morning,';
-  if (h < 15) return 'Good afternoon,';
-  if (h < 18) return 'Good evening,';
+  if (h < 17) return 'Good afternoon,';
+  if (h < 22) return 'Good evening,';
   return 'Good night,';
 }
 function dayOfYear(y, mIdx, d) { return Math.round((Date.UTC(y, mIdx, d) - Date.UTC(y, 0, 1)) / 864e5) + 1; }
@@ -631,46 +631,152 @@ function dayDiff(tz) {
   return dd === 0 ? '' : dd > 0 ? ' +1' : ' -1';
 }
 
-/* Sun path: a dithered arc from sunrise to sunset, with the sun as a hot dot. */
+/* ───────── Moon math (ported from SunCalc, BSD-2, Vladimir Agafonkin) ───────── */
+const Astro = (() => {
+  const rad = Math.PI / 180, dayMs = 864e5, J1970 = 2440588, J2000 = 2451545, e = rad * 23.4397;
+  const toDays = (date) => date.valueOf() / dayMs - 0.5 + J1970 - J2000;
+  const ra = (l, b) => Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l));
+  const dec = (l, b) => Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l));
+  const alt = (H, phi, d) => Math.asin(Math.sin(phi) * Math.sin(d) + Math.cos(phi) * Math.cos(d) * Math.cos(H));
+  const sidereal = (d, lw) => rad * (280.16 + 360.9856235 * d) - lw;
+  function sunCoords(d) {
+    const M = rad * (357.5291 + 0.98560028 * d);
+    const L = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+    return { dec: dec(L, 0), ra: ra(L, 0) };
+  }
+  function moonCoords(d) {
+    const L = rad * (218.316 + 13.176396 * d), M = rad * (134.963 + 13.064993 * d), F = rad * (93.272 + 13.22935 * d);
+    const l = L + rad * 6.289 * Math.sin(M), b = rad * 5.128 * Math.sin(F);
+    return { ra: ra(l, b), dec: dec(l, b), dist: 385001 - 20905 * Math.cos(M) };
+  }
+  function moonAltitude(date, lat, lng) {
+    const d = toDays(date), c = moonCoords(d);
+    const H = sidereal(d, rad * -lng) - c.ra;
+    return alt(H, rad * lat, c.dec) / rad; // degrees
+  }
+  function illumination(date) {
+    const d = toDays(date), s = sunCoords(d), m = moonCoords(d), sdist = 149598000;
+    const phi = Math.acos(Math.sin(s.dec) * Math.sin(m.dec) + Math.cos(s.dec) * Math.cos(m.dec) * Math.cos(s.ra - m.ra));
+    const inc = Math.atan2(sdist * Math.sin(phi), m.dist - sdist * Math.cos(phi));
+    const angle = Math.atan2(Math.cos(s.dec) * Math.sin(s.ra - m.ra), Math.sin(s.dec) * Math.cos(m.dec) - Math.cos(s.dec) * Math.sin(m.dec) * Math.cos(s.ra - m.ra));
+    return { fraction: (1 + Math.cos(inc)) / 2, phase: 0.5 + (0.5 * inc * (angle < 0 ? -1 : 1)) / Math.PI };
+  }
+  // The moon's current pass: when it rose and when it sets (or when it next rises).
+  function moonPass(now, lat, lng) {
+    const H0 = 0.133, step = 6 * 60000;
+    const up = (t) => moonAltitude(new Date(t), lat, lng) > H0;
+    const t0 = now.valueOf(), isUp = up(t0);
+    const find = (from, dir, want) => { for (let t = from + dir * step, n = 0; n < 300; n++, t += dir * step) if (up(t) === want) return t - (dir > 0 ? 0 : -step); return null; };
+    if (isUp) return { up: true, rise: find(t0, -1, false), set: find(t0, 1, false) };
+    return { up: false, nextRise: find(t0, 1, true) };
+  }
+  return { illumination, moonPass };
+})();
+function phaseName(p, f) {
+  if (f < 0.03) return 'New moon';
+  if (f > 0.97) return 'Full moon';
+  const side = p < 0.5 ? 'Waxing' : 'Waning';
+  if (f < 0.42) return side + ' crescent';
+  if (f <= 0.58) return p < 0.5 ? 'First quarter' : 'Last quarter';
+  return side + ' gibbous';
+}
+
+/* Sun path by day (hot dithered sun), moon path by night (real phase + real moonrise/moonset). */
 let sunTimes = null; // { rise: minutes, set: minutes }
-function drawSunArc() {
+let moonCache = { key: '', pass: null, ill: null };
+function drawSunArc(tms = 0) {
   const c = $('#sunarc'); const r = c.getBoundingClientRect();
   const W = Math.max(1, Math.round(r.width)), H = Math.max(1, Math.round(r.height));
-  c.width = W; c.height = H;
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
   const ctx = c.getContext('2d'); const img = ctx.createImageData(W, H); const u = new Uint32Array(img.data.buffer);
   const dot = (x, y, s, col) => { x |= 0; y |= 0; if (x < 0 || y < 0 || x + s > W || y + s > H) return; for (let j = 0; j < s; j++) for (let i = 0; i < s; i++) u[(y + j) * W + x + i] = col; };
-  const p = partsIn(CONFIG.place.tz); const now = +p.hour * 60 + +p.minute;
+  const t = reduced ? 0 : tms / 1000;
+  const p = partsIn(CONFIG.place.tz); const now = +p.hour * 60 + +p.minute + +p.second / 60;
   const rise = sunTimes ? sunTimes.rise : 5 * 60 + 30, set = sunTimes ? sunTimes.set : 17 * 60 + 40;
   const horizon = H - 8, padX = 10, arcH = H - 22;
-  // Horizon: dotted line.
+  const at = (q) => [padX + q * (W - padX * 2), horizon - Math.sin(q * Math.PI) * arcH];
+  const fmt = (m) => `${pad2(Math.floor(m / 60) % 24)}:${pad2(Math.floor(m % 60))}`;
+  const fmtTs = (ts) => { const q = partsIn(CONFIG.place.tz, new Date(ts)); return `${q.hour}:${q.minute}`; };
+  const left = $('#sunrise'), mid = $('#sunNow'), right = $('#sunset'), label = $('#sunLabel');
   for (let x = 0; x < W; x += 4) dot(x, horizon, 1, 0xff7f7f7f);
-  const prog = (now - rise) / (set - rise);
-  const at = (t) => [padX + t * (W - padX * 2), horizon - Math.sin(t * Math.PI) * arcH];
-  // Arc: travelled part solid-ish, the rest sparse.
-  for (let i = 0; i <= 260; i++) {
-    const t = i / 260; const [x, y] = at(t);
-    const done = t <= prog;
-    if (!done && i % 3) continue;
-    dot(x, y, done ? 2 : 1, done ? HEAT[3] : 0xff9a9a9a);
-  }
-  const sr = $('#sunNow');
-  if (prog >= 0 && prog <= 1) {
-    const [sx, sy] = at(prog); const R = 9;
+
+  const isDay = now >= rise && now <= set;
+  if (isDay) {
+    if (label) label.textContent = 'Sun path';
+    const prog = (now - rise) / (set - rise);
+    for (let i = 0; i <= 260; i++) { const q = i / 260, done = q <= prog; if (!done && i % 3) continue; const [x, y] = at(q); dot(x, y, done ? 2 : 1, done ? HEAT[3] : 0xff9a9a9a); }
+    const [sx, sy] = at(prog); const R = 9 * (1 + 0.04 * Math.sin(t * 1.6));
     for (let y = -R * 2; y <= R * 2; y += 2) for (let x = -R * 2; x <= R * 2; x += 2) {
-      const d = Math.hypot(x, y);
-      const b = d < R ? 1 - (d / R) * 0.35 : Math.exp(-(d - R) / 4) * 0.55;
+      const d = Math.hypot(x, y), a = Math.atan2(y, x);
+      const ray = d > R * 1.1 ? Math.pow(Math.max(0, Math.cos(a * 6 + t * 0.5)), 8) * Math.exp(-(d - R) / 5) * 0.6 : 0;
+      const b = d < R ? 1 - (d / R) * 0.35 : Math.exp(-(d - R) / 4) * 0.55 + ray;
       const px = Math.round(sx + x), py = Math.round(sy + y);
       if (py > horizon - 1) continue;
       if (b > bayer(px >> 1, py >> 1)) dot(px, py, 2, d < R * 0.45 ? WHITE : d < R * 0.8 ? HEAT[3] : d < R ? HEAT[2] : HEAT[1]);
     }
-    const left = set - now; sr.textContent = `Daylight left ${Math.floor(left / 60)}h ${pad2(left % 60)}m`;
+    const l = set - now;
+    left.textContent = `Rise ${fmt(rise)}`; right.textContent = `Set ${fmt(set)}`;
+    mid.textContent = `Daylight left ${Math.floor(l / 60)}h ${pad2(Math.floor(l % 60))}m`;
   } else {
-    const until = now < rise ? rise - now : 1440 - now + rise;
-    sr.textContent = `Sunrise in ${Math.floor(until / 60)}h ${pad2(until % 60)}m`;
+    if (label) label.textContent = 'Moon path';
+    // Moon data: recompute once a minute.
+    const key = `${p.hour}${p.minute}`;
+    if (moonCache.key !== key) moonCache = { key, pass: Astro.moonPass(new Date(), CONFIG.place.lat, CONFIG.place.lon), ill: Astro.illumination(new Date()) };
+    const { pass, ill } = moonCache;
+    // Twinkling stars in the sky above the arc.
+    let sd = 4242; const rnd = () => { sd ^= sd << 13; sd ^= sd >>> 17; sd ^= sd << 5; return (sd >>> 0) / 4294967296; };
+    for (let k = 0; k < Math.round(W / 9); k++) {
+      const x = rnd() * W, y = rnd() * (horizon - 6), ph = rnd() * 6.28, sp = 0.6 + rnd() * 1.6;
+      const tw = 0.5 + 0.5 * Math.sin(t * sp + ph);
+      if (tw > 0.35) dot(x, y, tw > 0.92 && rnd() < 0.5 ? 2 : 1, tw > 0.75 ? WHITE : 0xff8a8a8a);
+    }
+    const untilSunrise = now < rise ? rise - now : 1440 - now + rise;
+    const sunriseTxt = `Sunrise in ${Math.floor(untilSunrise / 60)}h ${pad2(Math.floor(untilSunrise % 60))}m`;
+    const pct = Math.round(ill.fraction * 100);
+    if (pass.up && pass.rise && pass.set) {
+      const prog = Math.min(1, Math.max(0, (Date.now() - pass.rise) / (pass.set - pass.rise)));
+      const [mx, my] = at(prog); const R = Math.min(15, Math.max(11, H * 0.15));
+      for (let i = 0; i <= 260; i++) {
+        const q = i / 260, done = q <= prog; if (!done && i % 3) continue;
+        const [x, y] = at(q); if (Math.hypot(x - mx, y - my) < R * 1.7) continue; // keep the moon clear
+        dot(x, y, done ? 2 : 1, done ? 0xffd8d8d8 : 0xff8a8a8a);
+      }
+      // Moon disc with the real phase: lit side right while waxing, left while waning.
+      const k = Math.cos(2 * Math.PI * ill.phase), waxing = ill.phase < 0.5;
+      const pulse = 0.85 + 0.15 * Math.sin(t * 0.9);
+      for (let y = -R * 2; y <= R * 2; y += 2) for (let x = -R * 2; x <= R * 2; x += 2) {
+        const d = Math.hypot(x, y), px = Math.round(mx + x), py = Math.round(my + y);
+        if (py > horizon - 1) continue;
+        let b = 0, col = WHITE;
+        if (d < R) {
+          const half = Math.sqrt(Math.max(1e-6, 1 - (y / R) ** 2));
+          const xr = x / R / half; // -1..1 across this row of the disc
+          const lit = waxing ? xr > k : xr < -k;
+          b = lit ? 1.05 - (d / R) * 0.2 : 0.16; // dark side keeps a faint earthshine
+          col = lit ? (d < R * 0.75 ? WHITE : 0xffe0f4ff) : 0xff5a5a5a;
+        } else {
+          b = Math.exp(-(d - R) / 3) * 0.3 * (0.4 + ill.fraction) * pulse; col = 0xff9a9a9a;
+        }
+        if (b > bayer(px >> 1, py >> 1)) dot(px, py, 2, col);
+      }
+      left.textContent = `Moonrise ${fmtTs(pass.rise)}`; right.textContent = `Moonset ${fmtTs(pass.set)}`;
+      mid.textContent = `${phaseName(ill.phase, ill.fraction)} ${pct}%`;
+    } else {
+      for (let i = 0; i <= 260; i += 4) { const [x, y] = at(i / 260); dot(x, y, 1, 0xff6a6a6a); }
+      left.textContent = `${phaseName(ill.phase, ill.fraction)} ${pct}%`;
+      right.textContent = pass.nextRise ? `Moonrise ${fmtTs(pass.nextRise)}` : '';
+      mid.textContent = sunriseTxt;
+    }
+    if (pass.up) mid.title = sunriseTxt;
   }
   ctx.putImageData(img, 0, 0);
-  const fmt = (m) => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
-  $('#sunrise').textContent = `Rise ${fmt(rise)}`; $('#sunset').textContent = `Set ${fmt(set)}`;
+}
+// Gentle animation (8 fps) while the arc is on screen and the tab is visible.
+function startSunArcLoop() {
+  if (reduced) return;
+  let onScreen = true;
+  new IntersectionObserver(([e]) => (onScreen = e.isIntersecting)).observe($('#sunarc'));
+  setInterval(() => { if (onScreen && !document.hidden) drawSunArc(performance.now()); }, 125);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1048,7 +1154,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-toggle-mode]').forEach((b) => (b.onclick = () => setMode(!document.body.classList.contains('mode-raw'))));
   renderFilters('id'); renderFilters('world'); renderLinks(); initNotes();
   tickClock(); setInterval(tickClock, 1000);
-  startGlyph(); startAsciiField();
+  startGlyph(); startAsciiField(); startSunArcLoop();
   refreshAll(false);
   setInterval(() => refreshAll(false), 5 * 60000);
   setInterval(tickAgo, 30000);
