@@ -7,6 +7,10 @@ const FEEDS = {
     { source: 'Detik', url: 'https://news.detik.com/berita/rss' },
     { source: 'Antara', url: 'https://www.antaranews.com/rss/terkini.xml' },
     { source: 'CNN ID', url: 'https://www.cnnindonesia.com/rss' },
+    // Business & markets: IHSG, rupiah, BI rate, MSCI etc. mostly only show up here.
+    { source: 'Detik Finance', url: 'https://finance.detik.com/rss' },
+    { source: 'CNBC ID', url: 'https://www.cnbcindonesia.com/market/rss' },
+    { source: 'CNN ID Ekonomi', url: 'https://www.cnnindonesia.com/ekonomi/rss' },
   ],
   world: [
     { source: 'Guardian', url: 'https://www.theguardian.com/world/rss' },
@@ -14,7 +18,7 @@ const FEEDS = {
     { source: 'The Verge', url: 'https://www.theverge.com/rss/index.xml' },
   ],
 };
-const PER_FEED = 8;
+const PER_FEED = 10;
 const PICK = 4;
 // Tried in order; the first one this key can use wins. GROQ_MODEL (optional) goes first.
 const MODELS = [process.env.GROQ_MODEL, 'llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean);
@@ -39,7 +43,7 @@ function parseFeed(xml) {
       title: decode(tag('title')),
       link,
       ts: Date.parse(decode(tag('pubDate') || tag('published') || tag('updated') || '')) || Date.now(),
-      text: decode(tag('description') || tag('summary') || tag('content') || '').slice(0, 260),
+      text: decode(tag('description') || tag('summary') || tag('content') || '').slice(0, 160),
     };
   }).filter((i) => i.title && i.link);
 }
@@ -60,7 +64,7 @@ async function getFeed({ source, url }) {
       return (j.items || []).slice(0, PER_FEED).map((i) => ({
         title: decode(i.title), link: i.link, source,
         ts: Date.parse((i.pubDate || '').replace(' ', 'T') + 'Z') || Date.now(),
-        text: decode(i.description || '').slice(0, 260),
+        text: decode(i.description || '').slice(0, 160),
       }));
     } catch {
       return [];
@@ -77,7 +81,13 @@ You only use facts that appear in the headlines given to you. Never invent detai
 Write in plain, simple English (translate Indonesian headlines).`;
 
   const user = `Pick the ${PICK} most important stories for INDONESIA (ids starting with I) and the ${PICK} most important for WORLD (ids starting with W).
-Skip celebrity gossip, sponsored/press-release items, sports results and duplicates of the same story.
+Rank by national or global significance, i.e. what affects the most people's money, safety or daily life:
+1. Big economy and market moves (stock index IHSG, rupiah, interest rates, MSCI/rating decisions, fuel or food prices, layoffs)
+2. National policy, laws, elections and major court or corruption cases
+3. Disasters, major accidents, public health
+4. Big tech and science news
+A story that several different sources cover is usually a big one: rank it high, and merge the coverage into one pick.
+Local crime, ceremonies, inaugurations, minor regional news, celebrity gossip, sponsored/press-release items and sports results rank low; skip them unless nothing else is available.
 For each pick give:
 - "id": the exact id, e.g. "I3"
 - "headline": max 9 words, plain words, no clickbait

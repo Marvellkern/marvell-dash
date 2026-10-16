@@ -356,7 +356,7 @@ body.mode-raw .p-brief { display: none; }
       <div class="panel__head"><h2 class="label" id="brief-indonesia-title">[03] Indonesia</h2><p class="mono"><span data-brief-updated>—</span> <button class="textbtn toggle" type="button" data-toggle-mode>[ All ]</button></p></div>
       <p class="brief__tldr" data-brief-tldr="indonesia">Reading the news for you…</p>
       <ol class="brief__list" data-brief="indonesia"></ol>
-      <p class="mono brief__note" data-brief-note>Summarised by Groq / Detik, Antara, CNN ID</p>
+      <p class="mono brief__note" data-brief-note>Summarised by Groq / Detik, Antara, CNN ID, CNBC</p>
     </section>
 
     <!-- [04] BRIEF WORLD -->
@@ -442,6 +442,8 @@ const CONFIG = {
       { label: 'Detik', url: 'https://news.detik.com/berita/rss' },
       { label: 'Antara', url: 'https://www.antaranews.com/rss/terkini.xml' },
       { label: 'CNN ID', url: 'https://www.cnnindonesia.com/rss' },
+      { label: 'Finance', url: 'https://finance.detik.com/rss' },
+      { label: 'Market', url: 'https://www.cnbcindonesia.com/market/rss' },
     ],
     world: [
       { label: 'Guardian', url: 'https://www.theguardian.com/world/rss' },
@@ -913,14 +915,14 @@ function setMode(raw) {
   store.set('mode', raw ? 'raw' : 'brief');
 }
 async function loadBrief(force) {
-  const cached = store.get('brief2');
+  const cached = store.get('brief3');
   if (cached) renderBrief(cached);
   if (!force && cached && Date.now() - cached.generatedAt < 30 * 60000) return true;
   try {
     const r = await fetch(BRIEF_URL + (force ? '?t=' + Math.floor(Date.now() / 60000) : ''), { signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined });
     const j = await r.json();
     if (!r.ok) throw Object.assign(new Error(j.message || j.error), { code: j.error });
-    store.set('brief2', j); renderBrief(j, !cached || cached.generatedAt !== j.generatedAt);
+    store.set('brief3', j); renderBrief(j, !cached || cached.generatedAt !== j.generatedAt);
     return true;
   } catch (e) {
     if (!cached) {
@@ -943,7 +945,7 @@ function renderBrief(b, animate) {
       <span class="brief__sum">${esc(it.summary)}</span><span class="brief__meta">${esc(it.source)} / ${ago(it.ts)} / Read ↗</span></a></li>`).join('');
   }
   document.querySelectorAll('[data-brief-updated]').forEach((u) => { u.textContent = ago(b.generatedAt); u.dataset.ts = b.generatedAt; });
-  document.querySelectorAll('[data-brief-note]').forEach((el, i) => (el.textContent = 'Summarised by Groq / ' + (i ? 'Guardian, Al Jazeera, The Verge' : 'Detik, Antara, CNN ID')));
+  document.querySelectorAll('[data-brief-note]').forEach((el, i) => (el.textContent = 'Summarised by Groq / ' + (i ? 'Guardian, Al Jazeera, The Verge' : 'Detik, Antara, CNN ID, CNBC')));
 }
 
 /* ─────────────────────────────────────────────────────────────
