@@ -182,6 +182,25 @@ ul { list-style: none; padding: 0; }
 .state { padding: 18px 0; font: 400 12px/1.6 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
 .state .textbtn { margin-left: -8px; }
 
+/* ───────── Brief (Groq) ───────── */
+@media (min-width: 1200px) { .p-brief { grid-column: span 8; grid-row: span 3; } }
+@media (min-width: 900px) and (max-width: 1199px) { .p-brief { grid-column: span 12; } }
+body:not(.mode-raw) .p-news-id, body:not(.mode-raw) .p-news-world { display: none; }
+body.mode-raw .p-brief { display: none; }
+.brief__tldr { max-width: 46ch; font-family: var(--serif); font-size: clamp(1.45rem, 2.2vw, 2rem); line-height: 1.12; letter-spacing: -0.005em; }
+.brief__cols { display: grid; gap: 32px 40px; margin-top: 30px; }
+@media (min-width: 700px) { .brief__cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.brief__col .label { margin-bottom: 10px; }
+.brief__list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--faint); }
+.brief__item a { display: grid; grid-template-columns: 4ch minmax(0, 1fr); gap: 6px 12px; padding: 16px 0 18px; border-bottom: 1px solid var(--faint); }
+.brief__head { font-size: 17px; line-height: 1.3; letter-spacing: -0.01em; }
+.brief__sum { grid-column: 2; font-size: 14.5px; line-height: 1.5; color: var(--dim); }
+.brief__meta { grid-column: 2; font: 400 11px/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.brief__item a:hover .brief__head, .brief__item a:focus-visible .brief__head { text-decoration: underline; text-decoration-color: var(--orange); text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.toggle { margin: -6px -8px -6px 0; }
+.brief__item .news__num { grid-row: span 3; }
+.brief__note { margin-top: 18px; }
+
 /* ───────── Rates ───────── */
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--faint); border: 1px solid var(--faint); }
 .stats__item { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 8px; padding: 16px 14px 14px; background: var(--black); min-width: 0; }
@@ -240,13 +259,15 @@ ul { list-style: none; padding: 0; }
 .nav__links button:hover, .nav__links button:focus-visible,
 .nav__brand:hover, .nav__brand:focus-visible,
 .filter:hover, .filter:focus-visible,
-.news__item a:hover .news__num, .news__item a:focus-visible .news__num { color: var(--black); }
+.news__item a:hover .news__num, .news__item a:focus-visible .news__num,
+.brief__item a:hover .news__num, .brief__item a:focus-visible .news__num { color: var(--black); }
 .textbtn:hover::before, .textbtn:focus-visible::before,
 .nav__links a:hover::before, .nav__links a:focus-visible::before,
 .nav__links button:hover::before, .nav__links button:focus-visible::before,
 .nav__brand:hover::before, .nav__brand:focus-visible::before,
 .filter:hover::before, .filter:focus-visible::before,
-.news__item a:hover .news__num::before, .news__item a:focus-visible .news__num::before { clip-path: inset(0 0 0 0); }
+.news__item a:hover .news__num::before, .news__item a:focus-visible .news__num::before,
+.brief__item a:hover .news__num::before, .brief__item a:focus-visible .news__num::before { clip-path: inset(0 0 0 0); }
 .filter:hover { border-color: transparent; }
 .nav__brand:hover .dim, .nav__brand:focus-visible .dim { color: var(--black); }
 .nav__brand svg rect { transition: fill 0ms linear 160ms; }
@@ -329,10 +350,22 @@ ul { list-style: none; padding: 0; }
       <div class="hourly" id="hourly" aria-label="Next 12 hours"></div>
     </section>
 
+    <!-- [03] BRIEF -->
+    <section class="panel p-brief" aria-labelledby="briefTitle">
+      <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
+      <div class="panel__head"><h2 class="label" id="briefTitle">[03] Today's brief</h2><p class="mono"><span data-brief-updated>—</span> <button class="textbtn toggle" type="button" data-toggle-mode>[ All headlines ]</button></p></div>
+      <p class="brief__tldr" id="briefTldr">Reading the news for you…</p>
+      <div class="brief__cols">
+        <div class="brief__col"><p class="label">Indonesia</p><ol class="brief__list" data-brief="indonesia"></ol></div>
+        <div class="brief__col"><p class="label">World</p><ol class="brief__list" data-brief="world"></ol></div>
+      </div>
+      <p class="mono brief__note" id="briefNote">Summarised by Groq from Detik, Antara, CNN ID, Guardian, Al Jazeera, The Verge</p>
+    </section>
+
     <!-- [03] INDONESIA -->
     <section class="panel p-news-id" aria-labelledby="newsIdTitle">
       <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
-      <div class="panel__head"><h2 class="label" id="newsIdTitle">[03] Indonesia</h2><p class="mono" data-updated="id">—</p></div>
+      <div class="panel__head"><h2 class="label" id="newsIdTitle">[03] Indonesia</h2><p class="mono"><span data-updated="id">—</span> <button class="textbtn toggle" type="button" data-toggle-mode>[ Brief ]</button></p></div>
       <div class="filters" data-filters="id" role="group" aria-label="Indonesian news source"></div>
       <ol class="news" data-news="id"></ol>
     </section>
@@ -866,6 +899,47 @@ function renderNews(group, items, ts, animate) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   [03] BRIEF — Groq summary from /api/brief (key stays on the server)
+   ───────────────────────────────────────────────────────────── */
+const BRIEF_URL = location.protocol.startsWith('http') ? '/api/brief' : 'https://marvell-dash.vercel.app/api/brief';
+function setMode(raw) {
+  document.body.classList.toggle('mode-raw', raw);
+  store.set('mode', raw ? 'raw' : 'brief');
+}
+async function loadBrief(force) {
+  const cached = store.get('brief');
+  if (cached) renderBrief(cached);
+  if (!force && cached && Date.now() - cached.generatedAt < 30 * 60000) return true;
+  try {
+    const r = await fetch(BRIEF_URL + (force ? '?t=' + Math.floor(Date.now() / 60000) : ''), { signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined });
+    const j = await r.json();
+    if (!r.ok) throw Object.assign(new Error(j.message || j.error), { code: j.error });
+    store.set('brief', j); renderBrief(j, !cached || cached.generatedAt !== j.generatedAt);
+    return true;
+  } catch (e) {
+    if (!cached) {
+      $('#briefTldr').textContent = e.code === 'no_key' ? 'Brief is off: no Groq key set yet.' : 'Couldn’t write the brief right now.';
+      $('#briefNote').textContent = e.code === 'no_key' ? 'Add GROQ_API_KEY in Vercel → Settings → Environment Variables, then redeploy.' : 'Showing all headlines instead. ' + (e.message || '');
+      if (e.code !== 'no_key') setMode(true);
+    }
+    return false;
+  }
+}
+function renderBrief(b, animate) {
+  if (b.tldr) {
+    const el = $('#briefTldr');
+    if (animate && !reduced) scramble(el, b.tldr, { duration: 700 }); else el.textContent = b.tldr;
+  }
+  for (const g of ['indonesia', 'world']) {
+    $(`[data-brief="${g}"]`).innerHTML = (b[g] || []).map((it, i) => `<li class="brief__item"><a href="${esc(it.link)}" target="_blank" rel="noopener" title="${esc(it.original || '')}">
+      <span class="news__num">${pad2(i + 1)}</span><span class="brief__head">${esc(it.headline)}</span>
+      <span class="brief__sum">${esc(it.summary)}</span><span class="brief__meta">${esc(it.source)} / ${ago(it.ts)} / Read ↗</span></a></li>`).join('');
+  }
+  const u = document.querySelector('[data-brief-updated]'); u.textContent = ago(b.generatedAt); u.dataset.ts = b.generatedAt;
+  $('#briefNote').textContent = 'Summarised by Groq from Detik, Antara, CNN ID, Guardian, Al Jazeera, The Verge';
+}
+
+/* ─────────────────────────────────────────────────────────────
    [05] RATES (Frankfurter / ECB, fallback open.er-api.com)
    ───────────────────────────────────────────────────────────── */
 async function loadRates(force) {
@@ -884,6 +958,7 @@ async function loadRates(force) {
       const j = await fetchJSON('https://open.er-api.com/v6/latest/USD');
       out = { date: (j.time_last_update_utc || '').slice(5, 16), rates: Object.fromEntries(CONFIG.rates.map((c) => [c, j.rates.IDR / j.rates[c]])) };
     }
+    if (Object.values(out.rates).some((v) => !isFinite(v))) throw new Error('bad rates');
     const data = { ts: Date.now(), ...out, prev: cached && cached.date !== out.date ? cached.rates : cached?.prev };
     store.set('rates2', data); renderRates(data);
     return true;
@@ -946,7 +1021,7 @@ let syncing = false;
 async function refreshAll(force) {
   if (syncing) return; syncing = true;
   const s = $('#navStatus'); s.textContent = 'Syncing…';
-  const res = await Promise.all([loadWeather(force), loadRates(force), loadNews('id', force), loadNews('world', force)]);
+  const res = await Promise.all([loadWeather(force), loadRates(force), loadBrief(force), loadNews('id', force), loadNews('world', force)]);
   const ok = res.filter(Boolean).length;
   const p = partsIn(CONFIG.place.tz);
   s.textContent = ok === res.length ? `Synced ${p.hour}:${p.minute}` : `${ok}/${res.length} sources live`;
@@ -961,6 +1036,8 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#brandName').textContent = CONFIG.name; $('#footName').textContent = CONFIG.name;
   $('#tzLabel').textContent = CONFIG.place.tzLabel; $('#year').textContent = partsIn(CONFIG.place.tz).year;
   drawStars(); addEventListener('resize', () => { drawStars(); drawSunArc(); });
+  setMode(store.get('mode') === 'raw');
+  document.querySelectorAll('[data-toggle-mode]').forEach((b) => (b.onclick = () => setMode(!document.body.classList.contains('mode-raw'))));
   renderFilters('id'); renderFilters('world'); renderLinks(); initNotes();
   tickClock(); setInterval(tickClock, 1000);
   startGlyph(); startAsciiField();
