@@ -16,7 +16,9 @@ const FEEDS = {
 };
 const PER_FEED = 8;
 const PICK = 4;
-const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+// Tried in order; the first one this key can use wins. GROQ_MODEL (optional) goes first.
+const MODELS = [process.env.GROQ_MODEL, 'llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'].filter(Boolean);
+let workingModel = null; // remembered while the function instance stays warm
 
 const decode = (s = '') =>
   s
@@ -90,21 +92,56 @@ ${list('indonesia')}
 WORLD
 ${list('world')}`;
 
-  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
+  const call = async (model) => {
+    const body = {
+      model,
       temperature: 0.3,
-      max_tokens: 1200,
+      max_tokens: 2000,
       response_format: { type: 'json_object' },
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!r.ok) throw new Error(`groq ${r.status}: ${(await r.text()).slice(0, 200)}`);
-  const j = await r.json();
-  return JSON.parse(j.choices[0].message.content);
+    };
+    if (model.startsWith('openai/gpt-oss')) body.reasoning_effort = 'low';
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(25000),
+    });
+    const text = await r.text();
+    if (!r.ok) throw Object.assign(new Error(`groq ${r.status}: ${text.slice(0, 200)}`), { status: r.status, modelMissing: /model_not_found|does not exist|decommissioned|not have access/i.test(text) });
+    const content = JSON.parse(text).choices[0].message.content || '';
+    return JSON.parse(content.slice(content.indexOf('{'), content.lastIndexOf('}') + 1));
+  };
+
+  // Models this key can see, used when none of the preferred ones are available.
+  const listModels = async () => {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${process.env.GROQ_API_KEY}` }, signal: AbortSignal.timeout(8000) });
+      const j = await r.json();
+      return (j.data || []).map((m) => m.id).filter((id) => !/whisper|guard|tts|orpheus|playai|vision|compound|safeguard/i.test(id));
+    } catch {
+      return [];
+    }
+  };
+
+  let candidates = workingModel ? [workingModel, ...MODELS.filter((m) => m !== workingModel)] : [...MODELS];
+  let listed = false;
+  let lastErr;
+  for (let i = 0; i < candidates.length; i++) {
+    try {
+      const out = await call(candidates[i]);
+      workingModel = candidates[i];
+      return { ...out, _model: candidates[i] };
+    } catch (e) {
+      lastErr = e;
+      if (!e.modelMissing && !(e instanceof SyntaxError)) throw e; // auth / rate limit: stop here
+      if (i === candidates.length - 1 && !listed) {
+        listed = true;
+        candidates = candidates.concat((await listModels()).filter((m) => !candidates.includes(m)).slice(0, 4));
+      }
+    }
+  }
+  throw lastErr || new Error('no usable Groq model');
 }
 
 export default async function handler(req, res) {
@@ -140,7 +177,7 @@ export default async function handler(req, res) {
         .filter((x, i, a) => a.findIndex((y) => y.link === x.link) === i)
         .slice(0, PICK);
 
-    const out = { generatedAt: Date.now(), model: MODEL, tldr: String(ai.tldr || ''), indonesia: pick('indonesia'), world: pick('world') };
+    const out = { generatedAt: Date.now(), model: ai._model, tldr: String(ai.tldr || ''), indonesia: pick('indonesia'), world: pick('world') };
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
     return res.status(200).json(out);
   } catch (e) {

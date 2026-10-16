@@ -919,8 +919,7 @@ async function loadBrief(force) {
   } catch (e) {
     if (!cached) {
       $('#briefTldr').textContent = e.code === 'no_key' ? 'Brief is off: no Groq key set yet.' : 'Couldn’t write the brief right now.';
-      $('#briefNote').textContent = e.code === 'no_key' ? 'Add GROQ_API_KEY in Vercel → Settings → Environment Variables, then redeploy.' : 'Showing all headlines instead. ' + (e.message || '');
-      if (e.code !== 'no_key') setMode(true);
+      $('#briefNote').textContent = e.code === 'no_key' ? 'Add GROQ_API_KEY in Vercel → Settings → Environment Variables, then redeploy.' : 'Use [ All headlines ] for now. ' + String(e.message || '').slice(0, 140);
     }
     return false;
   }
