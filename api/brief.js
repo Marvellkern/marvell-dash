@@ -78,6 +78,7 @@ async function askGroq(pool) {
 
   const system = `You write a calm, short daily news brief for a young freelance video editor in Semarang, Indonesia.
 You only use facts that appear in the headlines given to you. Never invent details, numbers or quotes.
+Keep the certainty of the source: if a headline says something may, could, plans to or is expected to happen ("mau", "akan", "berpotensi", "bisa"), say it may/could happen. Never turn a possibility, plan or proposal into a done deal.
 Write in plain, simple English (translate Indonesian headlines).`;
 
   const user = `Pick the ${PICK} most important stories for INDONESIA (ids starting with I) and the ${PICK} most important for WORLD (ids starting with W).
