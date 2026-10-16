@@ -389,7 +389,7 @@ body.mode-raw .p-brief { display: none; }
       <span class="corner corner--tl" aria-hidden="true">+</span><span class="corner corner--br" aria-hidden="true">+</span>
       <div class="panel__head"><h2 class="label" id="ratesTitle">[05] Rates → IDR</h2><p class="mono" id="ratesDate">—</p></div>
       <dl class="stats" id="rates"></dl>
-      <p class="mono rates__foot" id="ratesFoot">Mid-market, daily</p>
+      <p class="mono rates__foot" id="ratesFoot">Market rate</p>
     </section>
 
     <!-- [06] LINKS -->
@@ -951,25 +951,16 @@ function renderBrief(b, animate) {
 /* ─────────────────────────────────────────────────────────────
    [05] RATES (Frankfurter / ECB, fallback open.er-api.com)
    ───────────────────────────────────────────────────────────── */
+const RATES_URL = (location.protocol.startsWith('http') ? '' : 'https://marvell-dash.vercel.app') + '/api/rates?c=' + CONFIG.rates.join(',');
 async function loadRates(force) {
-  const cached = store.get('rates2');
+  const cached = store.get('rates3');
   if (cached) renderRates(cached);
-  if (!force && cached && Date.now() - cached.ts < CONFIG.refresh.rates * 60000) return true;
+  if (!force && cached && Date.now() - cached.ts < 5 * 60000) return true;
   try {
-    let out;
-    const want = CONFIG.rates.filter((c) => c !== 'EUR');
-    try {
-      // Ask with EUR as the base (full precision), then cross: X→IDR = IDR per EUR / X per EUR.
-      const j = await fetchJSON(`https://api.frankfurter.app/latest?from=EUR&to=${['IDR', ...want].join(',')}`);
-      const r = { ...j.rates, EUR: 1 };
-      out = { date: j.date, rates: Object.fromEntries(CONFIG.rates.map((c) => [c, r.IDR / r[c]])) };
-    } catch {
-      const j = await fetchJSON('https://open.er-api.com/v6/latest/USD');
-      out = { date: (j.time_last_update_utc || '').slice(5, 16), rates: Object.fromEntries(CONFIG.rates.map((c) => [c, j.rates.IDR / j.rates[c]])) };
-    }
-    if (Object.values(out.rates).some((v) => !isFinite(v))) throw new Error('bad rates');
-    const data = { ts: Date.now(), ...out, prev: cached && cached.date !== out.date ? cached.rates : cached?.prev };
-    store.set('rates2', data); renderRates(data);
+    const j = await fetchJSON(RATES_URL);
+    if (Object.values(j.rates).some((v) => !isFinite(v))) throw new Error('bad rates');
+    const data = { ts: Date.now(), ...j };
+    store.set('rates3', data); renderRates(data);
     return true;
   } catch {
     if (!cached) $('#rates').innerHTML = `<div class="stats__item" style="grid-column:1/-1"><dd class="mono">Signal lost</dd><dt>Rates unavailable</dt></div>`;
@@ -978,12 +969,20 @@ async function loadRates(force) {
 }
 function renderRates(d) {
   $('#rates').innerHTML = CONFIG.rates.map((c) => {
-    const v = d.rates[c]; const p = d.prev?.[c];
+    const v = d.rates[c]; const p = d.prevClose?.[c];
     const delta = p ? ((v - p) / p) * 100 : null;
+    // Rupiah view: a higher IDR price means the rupiah got weaker.
     const arrow = delta == null ? '' : ` ${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}%`;
-    return `<div class="stats__item"><dd>${Math.round(v).toLocaleString('id-ID')}</dd><dt>1 ${c}${arrow}</dt></div>`;
+    return `<div class="stats__item" title="${p ? 'vs previous close ' + Math.round(p).toLocaleString('id-ID') : ''}"><dd>${v.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</dd><dt>1 ${c}${arrow}</dt></div>`;
   }).join('');
-  $('#ratesDate').textContent = d.date || '—';
+  if (d.source === 'live' && d.time) {
+    const t = partsIn(CONFIG.place.tz, new Date(d.time));
+    $('#ratesDate').textContent = `Live / ${t.hour}:${t.minute}`;
+    $('#ratesFoot').textContent = 'Market rate, updates every 5 min. ▲ = rupiah weaker today';
+  } else {
+    $('#ratesDate').textContent = d.date || '—';
+    $('#ratesFoot').textContent = 'ECB daily reference rate (live source unavailable)';
+  }
 }
 
 /* ───────── [06] Links ───────── */
